@@ -6,7 +6,9 @@ import numpy as np
 from my_util import *
 
 data_root_dir = '../datasets/original/'
-save_dir = "../datasets/parsed_data/"
+save_dir = "../datasets/preprocessed_data/"
+
+char_to_remove = ['+','-','*','/','=','++','--','\\','<str>','<char>','|','&','!']
 
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
@@ -50,22 +52,37 @@ def is_empty_line(code_line):
 
 def preprocess_code_line(code_line):
     '''
-            java_code = java_code.replaceAll("!", " ! ")
-                    .replaceAll("\\+\\+", " \\+\\+ ").replaceAll("--", " -- ")
-                    .replace('\\',' ').replaceAll("\'\'", "\'")
-                    .replaceAll("\".*?\"", "<str>")		
-                    .replaceAll("\'.*?\'", " <char> ")
-                    .replaceAll("\\[.*?\\]", "")
-                    .replaceAll("[\\.|,|:|;|{|}|(|)]", " ")
-                    .replaceAll("<[^str][^char].*?>", "");
+        input
+            code_line (string)
     '''
-    code_line = code_line.replace('!', ' ! ').replace('++', ' ++ ').replace('--', ' -- ').replace('\\', ' ')
+
+    '''
+        java_code = java_code.replaceAll("!", " ! ")
+                .replaceAll("\\+\\+", " \\+\\+ ").replaceAll("--", " -- ")
+                .replace('\\',' ').replaceAll("\'\'", "\'")
+                .replaceAll("\".*?\"", "<str>")		
+                .replaceAll("\'.*?\'", " <char> ")
+                .replaceAll("\\[.*?\\]", "")
+                .replaceAll("[\\.|,|:|;|{|}|(|)]", " ")
+                .replaceAll("<[^str][^char].*?>", "");
+    '''
+
+    
+    java_preserved_tokens = [] # for later experiment
+
     code_line = re.sub("\'\'", "\'", code_line)
     code_line = re.sub("\".*?\"", "<str>", code_line)
     code_line = re.sub("\'.*?\'", "<char>", code_line)
+    code_line = re.sub('\b\d+\b','',code_line)
     code_line = re.sub("\\[.*?\\]", "", code_line)
     code_line = re.sub("[\\.|,|:|;|{|}|(|)]", " ", code_line)
-    code_line = re.sub("<[^str][^char].*?>", "", code_line)
+
+    for char in char_to_remove:
+        code_line = code_line.replace(char,' ')
+
+    # code_line = code_line.replace('<str>','')
+    # code_line = code_line.replace('<char>','')
+
 
     code_line = code_line.strip()
 
@@ -136,7 +153,7 @@ def preprocess_data(proj_name):
         line_level_data = pd.read_csv(line_lvl_dir+rel+'_defective_lines_dataset.csv', encoding='latin')
 
         file_level_data = file_level_data.fillna('')
-        
+
         buggy_files = list(line_level_data['File'].unique())
 
         preprocessed_df_list = []
@@ -169,7 +186,7 @@ def preprocess_data(proj_name):
         # break
 
         all_df = pd.concat(preprocessed_df_list)
-        all_df.to_csv(save_dir+rel+"_with_line_ground_truth.csv",index=False)
+        all_df.to_csv(save_dir+rel+".csv",index=False)
         print('finish release {}'.format(rel))
 
 for proj in list(all_releases.keys()):
