@@ -79,9 +79,6 @@ save_model_dir = '../output/model/DeepLineDP/'+dir_suffix+'/'
 
 file_lvl_gt = '../datasets/preprocessed_data/'
 
-
-if not os.path.exists(prediction_dir):
-    os.makedirs(prediction_dir)
     
 # labels is a tensor of label
 def get_loss_weight(labels):
