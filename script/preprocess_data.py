@@ -109,7 +109,7 @@ def create_code_df(code_str, filename):
     code_lines = code_str.splitlines()
     
     preprocess_code_lines = []
-    is_comment = []
+    is_comments = []
     is_blank_line = []
 
 
@@ -123,9 +123,13 @@ def create_code_df(code_str, filename):
 
     for l in code_lines:
         l = l.strip()
-        is_comment.append(is_comment_line(l,comments_list))
+        is_comment = is_comment_line(l,comments_list)
+        is_comments.append(is_comment)
         # preprocess code here then check empty line...
-        l = preprocess_code_line(l)
+
+        if not is_comment:
+            l = preprocess_code_line(l)
+            
         is_blank_line.append(is_empty_line(l))
         preprocess_code_lines.append(l)
 
@@ -138,7 +142,7 @@ def create_code_df(code_str, filename):
     df['is_test_file'] = [is_test]*len(code_lines)
     df['code_line'] = preprocess_code_lines
     df['line_number'] = np.arange(1,len(code_lines)+1)
-    df['is_comment'] = is_comment
+    df['is_comment'] = is_comments
     df['is_blank'] = is_blank_line
 
     return df
