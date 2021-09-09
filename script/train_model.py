@@ -29,7 +29,6 @@ arg.add_argument('-sent_gru_num_layers', type=int, default=1, help='number of GR
 arg.add_argument('-dropout', type=float, default=0.5, help='dropout rate')
 arg.add_argument('-lr', type=float, default=0.001, help='learning rate')
 arg.add_argument('-exp_name',type=str,default='')
-arg.add_argument('-target_epochs', type=str, default='5', help='which epoch of model to load')
 
 arg.add_argument('-include_comment',action='store_true')
 arg.add_argument('-include_blank_line',action='store_true')
@@ -268,3 +267,6 @@ def train_model(dataset_name):
         loss_df['valid_loss'] = val_loss_all_epochs
         
         loss_df.to_csv(loss_dir+dataset_name+'-loss_record.csv',index=False)
+
+dataset_name = args.dataset
+train_model(dataset_name)
