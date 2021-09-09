@@ -35,7 +35,7 @@ all_releases = {'activemq': ['activemq-5.0.0', 'activemq-5.1.0', 'activemq-5.2.0
 all_projs = list(all_train_releases.keys())
 
 # file_lvl_gt = os.path.join(os.path.dirname(os.getcwd()),'java-parsed-AST-no-comment-no-varname-no-methodname/')
-file_lvl_gt = '../datasets/parsed_dataset_with_comments/'
+file_lvl_gt = '../datasets/preprocessed_data/'
 # file_lvl_gt = '../datasets/parsed_dataset_without_comments/'
 # file_lvl_gt = '../datasets/abstract_code_without_comments/'
 
@@ -45,13 +45,96 @@ file_lvl_gt_for_baseline = '../../datasets/parsed_dataset_without_comments/'
 
 
 # word2vec_dir = './Word2Vec_model-50dim-with-comment/'
-word2vec_dir = './Word2Vec_model-50dim-cross-release/'
-word2vec_deepline_dp_file_dir = os.path.join(word2vec_dir,'DeepLineDP')
-word2vec_baseline_file_dir = os.path.join(word2vec_dir,'baseline')
+word2vec_dir = '../output/Word2Vec_model/'
+# word2vec_deepline_dp_file_dir = os.path.join(word2vec_dir,'DeepLineDP')
+# word2vec_baseline_file_dir = os.path.join(word2vec_dir,'baseline')
 # word2vec_deepline_dp_file_dir = os.path.join(word2vec_dir,'DeepLineDP_abs')
 # word2vec_baseline_file_dir = os.path.join(word2vec_dir,'baseline_abs')
 
-loss_dir = './loss/'
+# loss_dir = './loss/'
+
+def prepare_code2d(code_list):
+    '''
+        input
+            code_list (list): list that contains code each line (in str format)
+        output
+            code2d (nested list): a list that contains list of tokens with padding by '<pad>'
+    '''
+    code2d = []
+
+    for c in code_list:
+        c = re.sub('\\s+',' ',c)
+        token_list = c.strip().split()
+        total_tokens = len(token_list)
+        
+        token_list = token_list[:max_seq_len]
+
+        if total_tokens < max_seq_len:
+            token_list = token_list + ['<pad>']*(max_seq_len-total_tokens)
+
+        code2d.append(token_list)
+
+    return code2d
+
+# def prepare_data(rel):
+#     df = pd.read_csv(file_lvl_gt+rel+'.txt',sep='\t')
+#     df = df.dropna()
+    
+#     code = list(df['Code'])
+    
+#     code_3D_list = create3DList(code)
+#     label = list(df['Bug'])
+    
+#     return code_3D_list, label
+
+def get_df(rel, include_comment=False, include_blank_line=False, include_test_files = False):
+    df = pd.read_csv(file_lvl_gt+rel+".csv")
+    # print(df.head())
+
+    df = df.fillna('')
+
+    if not include_comment:
+        df = df[df['is_comment']==False]
+
+    if not include_blank_line:
+        df = df[df['is_blank']==False]
+
+    if not include_test_files:
+        df = df[df['is_test_file']==False]
+
+    return df
+
+def get_code3d_and_label(df):
+    '''
+        input
+            df (DataFrame): a dataframe from get_df()
+        output
+            code3d (nested list): a list of code2d from prepare_code2d()
+            all_file_label (list): a list of file-level label
+    '''
+
+    code3d = []
+    all_file_label = []
+
+    for filename, group_df in df.groupby('filename'):
+        # print(filename)
+        # print(group_df)
+
+        file_label = bool(group_df['file-label'].unique())
+
+        code = list(group_df['code_line'])
+
+        code2d = prepare_code2d(code)
+        code3d.append(code2d)
+
+        all_file_label.append(file_label)
+        # print(code)
+
+        # code_str = '\n'.join(code)
+        # print(code_str)
+        # break
+
+    return code3d, all_file_label
 
 def get_w2v_weight_for_deep_learning_models(word2vec_model, embed_dim):
     word2vec_weights = torch.FloatTensor(word2vec_model.wv.syn0).cuda()
