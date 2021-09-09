@@ -63,6 +63,29 @@ def get_loss_weight(labels):
     weight_tensor = torch.tensor(weight_list).reshape(-1,1).cuda()
     return weight_tensor
 
+def prepare_code2d(code_list):
+    '''
+        input
+            code_list (list): list that contains code each line (in str format)
+        output
+            code2d (nested list): a list that contains list of tokens with padding by '<pad>'
+    '''
+    code2d = []
+
+    for c in code_list:
+        c = re.sub('\\s+',' ',c)
+        token_list = c.strip().split()
+        total_tokens = len(token_list)
+        
+        token_list = token_list[:max_seq_len]
+
+        if total_tokens < max_seq_len:
+            token_list = token_list + ['<pad>']*(max_seq_len-total_tokens)
+
+        code2d.append(token_list)
+
+    return code2d
+
 # def prepare_data(rel):
 #     df = pd.read_csv(file_lvl_gt+rel+'.txt',sep='\t')
 #     df = df.dropna()
@@ -74,9 +97,11 @@ def get_loss_weight(labels):
     
 #     return code_3D_list, label
 
-def get_combined_code(rel, include_comment=False, include_blank_line=False):
+def get_df(rel, include_comment=False, include_blank_line=False, include_test_files = False):
     df = pd.read_csv(file_lvl_gt+rel+".csv")
-    print(df.head())
+    # print(df.head())
+
+    df = df.fillna('')
 
     if not include_comment:
         df = df[df['is_comment']==False]
@@ -84,15 +109,42 @@ def get_combined_code(rel, include_comment=False, include_blank_line=False):
     if not include_blank_line:
         df = df[df['is_blank']==False]
 
-    df = df.fillna('')
+    if not include_test_files:
+        df = df[df['is_test_file']==False]
+
+    return df
+
+def get_code3d_and_label(df):
+    '''
+        input
+            df (DataFrame): a dataframe from get_df()
+        output
+            code3d (nested list): a list of code2d from prepare_code2d()
+            all_file_label (list): a list of file-level label
+    '''
     
+    code3d = []
+    all_file_label = []
+
     for filename, group_df in df.groupby('filename'):
         print(filename)
-        print(group_df)
+        # print(group_df)
+
+        file_label = bool(group_df['file-label'].unique())
 
         code = list(group_df['code_line'])
-        print(code)
+
+        code2d = prepare_code2d(code)
+        code3d.append(code2d)
+
+        all_file_label.append(file_label)
+        # print(code)
+
+        # code_str = '\n'.join(code)
+        # print(code_str)
         break
+
+    return code3d, all_file_label
 
 def train_model(dataset_name):
 
@@ -113,4 +165,5 @@ def train_model(dataset_name):
     train_rel = all_train_releases[dataset_name]
     valid_rel = all_eval_releases[dataset_name][0]
 
-    get_combined_code(train_rel)
+    train_df = get_df(train_rel)
+    get_code3d_and_label(train_df)
