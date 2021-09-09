@@ -13,22 +13,7 @@ from my_util import *
 # if not os.path.exists(word2vec_baseline_file_dir):
 #     os.makedirs(word2vec_baseline_file_dir)
 
-def get_w2v_path(include_comment=False,include_test_file=False):
-    suffix = ''
 
-    if include_comment:
-        suffix = suffix + 'with-comment-'
-    else:
-        suffix = suffix + 'without-comment-'
-
-    if include_test_file:
-        suffix = suffix + 'with-test-file'
-    else:
-        suffix = suffix + 'without-test-file'
-
-    actual_w2v_dir = word2vec_dir+suffix+'/'
-
-    return actual_w2v_dir
 
 def train_word2vec_model(dataset_name,include_comment=False,include_test_file=False, embedding_dim = 50):
 
@@ -57,14 +42,19 @@ def train_word2vec_model(dataset_name,include_comment=False,include_test_file=Fa
 
     # word2vec2 = Word2Vec(all_texts,size=100, min_count=1,sorted_vocab=1) #size is embedding size
 
-    print('finish Word2Vec training for',dataset_name)
+    # print('finish Word2Vec training for',dataset_name)
 
     word2vec.save(save_path)
     print('save word2vec model at path {} done'.format(save_path))
 
     # word2vec2.save(word2vec_baseline_file_dir+'/'+dataset_name+'.bin')
 
-train_word2vec_model('activemq',False,False,50)
+all_projs = list(all_train_releases.keys())
+
+for p in all_projs:
+    for inc_comment in [True, False]:
+        for inc_test in [True, False]:
+            train_word2vec_model(p,inc_comment,inc_test,50)
 
 # def train_word2vec_model_cross_release(dataset_name):
 #     cur_all_rels = all_releases[dataset_name]

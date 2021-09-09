@@ -136,6 +136,23 @@ def get_code3d_and_label(df):
 
     return code3d, all_file_label
 
+def get_w2v_path(include_comment=False,include_test_file=False):
+    suffix = ''
+
+    if include_comment:
+        suffix = suffix + 'with-comment-'
+    else:
+        suffix = suffix + 'without-comment-'
+
+    if include_test_file:
+        suffix = suffix + 'with-test-file'
+    else:
+        suffix = suffix + 'without-test-file'
+
+    actual_w2v_dir = word2vec_dir+suffix+'/'
+
+    return actual_w2v_dir
+    
 def get_w2v_weight_for_deep_learning_models(word2vec_model, embed_dim):
     word2vec_weights = torch.FloatTensor(word2vec_model.wv.syn0).cuda()
     

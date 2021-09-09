@@ -1,3 +1,4 @@
+from DeepLineDP.script.train_word2vec import get_w2v_path
 import os, re, argparse
 
 import torch.optim as optim
@@ -38,13 +39,27 @@ exp_name = ''
 
 max_train_LOC = 900
 
+include_comment = True
+include_blank_line = False
+include_test_file = False
+
 # dir_suffix = 'no-abs-rebalancing-adaptive-ratio2-with-comment'
 dir_suffix = 'rebalancing-adaptive-ratio2'
+
+if include_comment:
+    dir_suffix = dir_suffix + '-with-comment'
+
+if include_blank_line:
+    dir_suffix = dir_suffix + '-with-blank-line'
+
+if include_test_file:
+    dir_suffix = dir_suffix + '-with-test-file'
 
 prediction_dir = '../output/prediction/DeepLineDP/'+dir_suffix+'/'
 save_model_dir = '../output/model/DeepLineDP/'+dir_suffix+'/'
 
 file_lvl_gt = '../datasets/preprocessed_data/'
+
 
 if not os.path.exists(prediction_dir):
     os.makedirs(prediction_dir)
@@ -63,92 +78,10 @@ def get_loss_weight(labels):
     weight_tensor = torch.tensor(weight_list).reshape(-1,1).cuda()
     return weight_tensor
 
-def prepare_code2d(code_list):
-    '''
-        input
-            code_list (list): list that contains code each line (in str format)
-        output
-            code2d (nested list): a list that contains list of tokens with padding by '<pad>'
-    '''
-    code2d = []
-
-    for c in code_list:
-        c = re.sub('\\s+',' ',c)
-        token_list = c.strip().split()
-        total_tokens = len(token_list)
-        
-        token_list = token_list[:max_seq_len]
-
-        if total_tokens < max_seq_len:
-            token_list = token_list + ['<pad>']*(max_seq_len-total_tokens)
-
-        code2d.append(token_list)
-
-    return code2d
-
-# def prepare_data(rel):
-#     df = pd.read_csv(file_lvl_gt+rel+'.txt',sep='\t')
-#     df = df.dropna()
-    
-#     code = list(df['Code'])
-    
-#     code_3D_list = create3DList(code)
-#     label = list(df['Bug'])
-    
-#     return code_3D_list, label
-
-def get_df(rel, include_comment=False, include_blank_line=False, include_test_files = False):
-    df = pd.read_csv(file_lvl_gt+rel+".csv")
-    # print(df.head())
-
-    df = df.fillna('')
-
-    if not include_comment:
-        df = df[df['is_comment']==False]
-
-    if not include_blank_line:
-        df = df[df['is_blank']==False]
-
-    if not include_test_files:
-        df = df[df['is_test_file']==False]
-
-    return df
-
-def get_code3d_and_label(df):
-    '''
-        input
-            df (DataFrame): a dataframe from get_df()
-        output
-            code3d (nested list): a list of code2d from prepare_code2d()
-            all_file_label (list): a list of file-level label
-    '''
-    
-    code3d = []
-    all_file_label = []
-
-    for filename, group_df in df.groupby('filename'):
-        print(filename)
-        # print(group_df)
-
-        file_label = bool(group_df['file-label'].unique())
-
-        code = list(group_df['code_line'])
-
-        code2d = prepare_code2d(code)
-        code3d.append(code2d)
-
-        all_file_label.append(file_label)
-        # print(code)
-
-        # code_str = '\n'.join(code)
-        # print(code_str)
-        break
-
-    return code3d, all_file_label
 
 def train_model(dataset_name):
 
-    dataset_name = 'activemq'
+    # dataset_name = 'activemq'
     loss_dir = '../output/loss/'+dir_suffix+'/'
     actual_save_model_dir = save_model_dir+dataset_name+'/'
 
@@ -162,8 +95,28 @@ def train_model(dataset_name):
     if not os.path.exists(loss_dir):
         os.makedirs(loss_dir)
 
+    w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
+
     train_rel = all_train_releases[dataset_name]
     valid_rel = all_eval_releases[dataset_name][0]
 
-    train_df = get_df(train_rel)
-    get_code3d_and_label(train_df)
+    train_df = get_df(train_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
+    valid_df = get_df(train_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
+
+    train_code3d, train_label = get_code3d_and_label(train_df)
+    valid_code3d, valid_label = get_code3d_and_label(valid_df)
+
+    sample_weights = compute_class_weight(class_weight = 'balanced', classes = np.unique(train_label), y = train_label)
+
+    weight_dict['defect'] = sample_weights[1]
+    weight_dict['clean'] = sample_weights[0]
+
+
+    word2vec_file_dir = os.path.join(w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
+
+    word2vec = Word2Vec.load(word2vec_file_dir)
+    print('load Word2Vec for',dataset_name,'finished')
+
+    word2vec_weights = get_w2v_weight_for_deep_learning_models(word2vec, embed_dim)
+
+    vocab_size = len(word2vec.wv.vocab)  + 1 # for unknown tokens
