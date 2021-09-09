@@ -1,4 +1,3 @@
-from numpy.lib.npyio import _save_dispatcher
 import pandas as pd
 import os, re
 import numpy as np
@@ -74,8 +73,8 @@ def preprocess_code_line(code_line):
     code_line = re.sub("\".*?\"", "<str>", code_line)
     code_line = re.sub("\'.*?\'", "<char>", code_line)
     code_line = re.sub('\b\d+\b','',code_line)
-    code_line = re.sub("\\[.*?\\]", "", code_line)
-    code_line = re.sub("[\\.|,|:|;|{|}|(|)]", " ", code_line)
+    code_line = re.sub("\\[.*?\\]", '', code_line)
+    code_line = re.sub("[\\.|,|:|;|{|}|(|)]", ' ', code_line)
 
     for char in char_to_remove:
         code_line = code_line.replace(char,' ')
