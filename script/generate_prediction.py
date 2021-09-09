@@ -56,8 +56,6 @@ lr = args.lr
 save_every_epochs = 5
 exp_name = args.exp_name
 
-max_train_LOC = 900
-
 include_comment = args.include_comment
 include_blank_line = args.include_blank_line
 include_test_file = args.include_test_file
@@ -77,6 +75,7 @@ if include_test_file:
 prediction_dir = '../output/prediction/DeepLineDP/'+dir_suffix+'/'
 save_model_dir = '../output/model/DeepLineDP/'+dir_suffix+'/'
 
+
 file_lvl_gt = '../datasets/preprocessed_data/'
 
 
@@ -85,23 +84,16 @@ if not os.path.exists(prediction_dir):
 
 def predict_defective_files_in_releases(dataset_name, target_epochs):
 
-    batch_size = 8
-
     actual_save_model_dir = save_model_dir+dataset_name+'/'
 
     train_rel = all_train_releases[dataset_name]
     test_rel = all_eval_releases[dataset_name][1:]
     
-    test_code_3D_list_dict = {}
-    x_test_vec_dict = {}
-    test_label_dict = {}
-    
-    all_x_vec = []
-    
     w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
 
-    word2vec = Word2Vec.load(w2v_dir)
+    word2vec_file_dir = os.path.join(w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
 
+    word2vec = Word2Vec.load(word2vec_file_dir)
     print('load Word2Vec for',dataset_name,'finished')
 
     total_vocab = len(word2vec.wv.vocab)
@@ -133,15 +125,34 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
 
     model.load_state_dict(checkpoint['model_state_dict'])
 
-    
     model.sent_attention.word_attention.freeze_embeddings(True)
 
     model = model.cuda()
     model.eval()
 
-    # for rel in test_rel:
-        # print('evaluating release:', rel)
+    for rel in test_rel:
+        print('generating prediction of release:', rel)
         
+        test_df = get_df(rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
+    
+        for filename, df in test_df.groupby('filename'):
+            # print(filename)
+            # print(df)
+
+            file_label = bool(df['file-label'].unique())
+            line_label = list(df['line-label'])
+            line_number = list(df['line_number'])
+
+            code = list(df['code_line'])
+
+            code2d = prepare_code2d(code)
+
+            code3d = [code2d]
+
+            break
+
+        break
+
         # test_dl = get_dataloader(x_test_vec_dict[rel], test_label_dict[rel], batch_size,max_sent_len)
 
         # y_pred = []
