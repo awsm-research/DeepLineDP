@@ -228,7 +228,8 @@ def train_model(dataset_name):
         train_loss_all_epochs.append(np.mean(train_losses))
 
         with torch.no_grad():
-
+            criterion.weight = None
+            
             for inputs, labels in valid_dl:
 
                 inputs, labels = inputs.cuda(), labels.cuda()
