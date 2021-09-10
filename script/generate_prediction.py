@@ -1,4 +1,4 @@
-import os, re, argparse
+import os, re, argparse, pickle
 
 import torch.optim as optim
 
@@ -29,6 +29,7 @@ arg.add_argument('-sent_gru_num_layers', type=int, default=1, help='number of GR
 arg.add_argument('-dropout', type=float, default=0.5, help='dropout rate')
 arg.add_argument('-lr', type=float, default=0.001, help='learning rate')
 arg.add_argument('-exp_name',type=str,default='')
+arg.add_argument('-target_epochs',type=str,default='100')
 
 arg.add_argument('-include_comment',action='store_true')
 arg.add_argument('-include_blank_line',action='store_true')
@@ -72,9 +73,9 @@ if include_blank_line:
 if include_test_file:
     dir_suffix = dir_suffix + '-with-test-file'
 
-prediction_dir = '../output/prediction/DeepLineDP/'+dir_suffix+'/'
+intermediate_output_dir = '../output/intermediate_output/DeepLineDP/'+dir_suffix+'/'
 save_model_dir = '../output/model/DeepLineDP/'+dir_suffix+'/'
-
+prediction_dir = '../output/prediction/DeepLineDP/'+dir_suffix+'/'
 
 file_lvl_gt = '../datasets/preprocessed_data/'
 
@@ -84,6 +85,7 @@ if not os.path.exists(prediction_dir):
 
 def predict_defective_files_in_releases(dataset_name, target_epochs):
 
+    
     actual_save_model_dir = save_model_dir+dataset_name+'/'
 
     train_rel = all_train_releases[dataset_name]
@@ -133,15 +135,21 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
     for rel in test_rel:
         print('generating prediction of release:', rel)
         
+        actual_intermediate_output_dir = intermediate_output_dir+rel+'/'
+
+        if not os.path.exists(actual_intermediate_output_dir):
+                os.makedirs(actual_intermediate_output_dir)
+
         test_df = get_df(rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
     
-        for filename, df in test_df.groupby('filename'):
-            # print(filename)
-            # print(df)
+        row_list = [] # for creating dataframe later...
+
+        for filename, df in tqdm(test_df.groupby('filename')):
 
             file_label = bool(df['file-label'].unique())
             line_label = list(df['line-label'])
             line_number = list(df['line_number'])
+            is_comments = list(df['is_comment'])
 
             code = list(df['code_line'])
 
@@ -149,35 +157,95 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
 
             code3d = [code2d]
 
-            break
+            codevec = get_x_vec(code3d, word2vec)
+            codevec_padded = pad_code(codevec,max_sent_len,limit_sent_len=False, mode='test') 
 
-        break
+            save_file_path = actual_intermediate_output_dir+filename.replace('/','_').replace('.java','')+'_'+target_epochs+'_epochs.pkl'
+            
+            if not os.path.exists(save_file_path):
+                with torch.no_grad():
+                    codevec_padded_tensor = torch.tensor(codevec_padded)
+                    output, word_att_weights, _ = model(codevec_padded_tensor)
+                    file_prob = output.item()
+                    prediction = bool(round(output.item()))
 
-        # test_dl = get_dataloader(x_test_vec_dict[rel], test_label_dict[rel], batch_size,max_sent_len)
+                    torch.cuda.empty_cache()
+                    
+                    output_dict = {
+                        'filename': filename,
+                        'file-label': file_label,
+                        'prob': file_prob,
+                        'pred': prediction,
+                        'word_attention_mat': word_att_weights,
+                        'line-label': line_label,
+                        'line-number': line_number
+                    }
 
-        # y_pred = []
-        # y_test = []
-        # y_prob = []
+                    pickle.dump(output_dict, open(save_file_path, 'wb'))
+                    
+            else:
+                output_dict = pickle.load(open(save_file_path, 'rb'))
+                file_prob = output_dict['prob']
+                prediction = output_dict['pred']
+                word_att_weights = output_dict['word_attention_mat']
 
-        # with torch.no_grad():
-        #     for inputs, labels in tqdm(test_dl):
-        #         inputs, labels = inputs.cuda(), labels.cuda()
-        #         output, word_att_weights, sent_att_weights = model(inputs)
+            numpy_word_attn = word_att_weights[0].cpu().detach().numpy()
 
-        #         pred = torch.round(output)
+            # loop through each row (based on code)
+            # for each row, split list then loop through the list
+            # then use the index to get attention from word_att_weights
+            # then store in list (somehow...) 
 
-        #         y_pred.extend(pred.cpu().numpy().squeeze().tolist())
-        #         y_test.extend(labels.cpu().numpy().squeeze().tolist())
-        #         y_prob.extend(output.cpu().numpy().squeeze().tolist())
+            # Line-level CSV: project, train, test, filename, file-level ground-truth, deeplinedp_prob, line-number, line-level ground-truth, token, attention score
 
-        #         torch.cuda.empty_cache()
+            # print(numpy_word_attn.shape, len(code), len(code2d), len(codevec[0]), len(codevec_padded[0]), codevec_padded_tensor.shape)
 
-        # prediction_df = pd.DataFrame()
-        # prediction_df['train_release'] = [train_rel]*len(y_test)
-        # prediction_df['test_release'] = [rel]*len(y_test)
-        # prediction_df['actual'] = y_test
-        # prediction_df['pred'] = y_pred
-        # prediction_df['prob'] = y_prob
+            # total_line = min(len(code), numpy_word_attn.shape[0]) 
+
+            for i in range(0,len(code)):
+                cur_line = code[i]
+                cur_line_label = line_label[i]
+                cur_line_number = line_number[i]
+                cur_is_comment = is_comments[i]
+
+                token_list = cur_line.strip().split()
+
+                # print(cur_line)
+
+                max_len = min(len(token_list),50) # limit max token each line
+
+                for j in range(0,max_len):  
+                    tok = token_list[j]
+                    word_attn = numpy_word_attn[i][j]
+
+                    row_dict = {
+                        'project': dataset_name, 
+                        'train': train_rel, 
+                        'test': rel, 
+                        'filename': filename, 
+                        'file-level-ground-truth': file_label, 
+                        'prediction-prob': file_prob, 
+                        'prediction-label': prediction, 
+                        'line-number': cur_line_number, 
+                        'line-level-ground-truth': cur_line_label, 
+                        'is-comment-line': cur_is_comment, 
+                        'token': tok, 
+                        'attention-score': word_attn
+                        }
+
+                    row_list.append(row_dict)
+
+                # break
+
+            # break
+
+        df = pd.DataFrame(row_list)
+
+        df.to_csv(prediction_dir+rel+'-'+target_epochs+'-epochs.csv', index=False)
+
+        print('finished release', rel)
+        # break
+
 
         # if exp_name == '':
         #     prediction_df.to_csv(prediction_dir+rel+'_'+target_epochs+'_epochs.csv',index=False)
@@ -185,3 +253,8 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
         #     prediction_df.to_csv(prediction_dir+rel+'_'+exp_name+'_'+target_epochs+'_epochs.csv',index=False)
 
         # print('finished predicting defective files in',rel)
+
+dataset_name = args.dataset
+target_epochs = args.target_epochs
+
+predict_defective_files_in_releases(dataset_name, target_epochs)
