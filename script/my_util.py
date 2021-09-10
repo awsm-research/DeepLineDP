@@ -212,7 +212,7 @@ def get_w2v_weight_for_deep_learning_models(word2vec_model, embed_dim):
     
 #     return code_3d
 
-def pad_code(code_list_3d,max_sent_len,limit_sent_len=True):
+def pad_code(code_list_3d,max_sent_len,limit_sent_len=True, mode='train'):
     paded = []
     
     for file in code_list_3d:
@@ -226,10 +226,11 @@ def pad_code(code_list_3d,max_sent_len,limit_sent_len=True):
             sent_list.append(new_line)
             
         
-        if max_sent_len-len(file) > 0:
-            for i in range(0,max_sent_len-len(file)):
-                sent_list.append([0]*max_seq_len)
-
+        if mode == 'train':
+            if max_sent_len-len(file) > 0:
+                for i in range(0,max_sent_len-len(file)):
+                    sent_list.append([0]*max_seq_len)
+                    
         if limit_sent_len:    
             paded.append(sent_list[:max_sent_len])
         else:
