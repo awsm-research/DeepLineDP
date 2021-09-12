@@ -37,8 +37,6 @@ arg.add_argument('-include_test_file',action='store_true')
 
 args = arg.parse_args()
 
-weight_dict = {}
-
 # model setting
 batch_size = args.batch_size
 num_epochs = args.num_epochs
@@ -65,7 +63,7 @@ include_test_file = args.include_test_file
 
 # dir_suffix = 'no-abs-rebalancing-adaptive-ratio2-with-comment'
 # dir_suffix = 'rebalancing-adaptive-ratio2' # wrong one...
-dir_suffix = 'correct_prob'
+dir_suffix = 'train-test-subsequent-release'
 
 if include_comment:
     dir_suffix = dir_suffix + '-with-comment'
@@ -82,21 +80,6 @@ prediction_dir = '../output/prediction/DeepLineDP/'+dir_suffix+'/'
 save_model_dir = '../output/model/DeepLineDP/'+dir_suffix+'/'
 
 file_lvl_gt = '../datasets/preprocessed_data/'
-
-    
-# labels is a tensor of label
-# def get_loss_weight(labels):
-#     label_list = labels.cpu().numpy().squeeze().tolist()
-#     weight_list = []
-
-#     for lab in label_list:
-#         if lab == 0:
-#             weight_list.append(weight_dict['clean'])
-#         else:
-#             weight_list.append(weight_dict['defect'])
-
-#     weight_tensor = torch.tensor(weight_list).reshape(-1,1).cuda()
-#     return weight_tensor
 
 
 def train_model(dataset_name):
@@ -127,18 +110,6 @@ def train_model(dataset_name):
     train_code3d, train_label = get_code3d_and_label(train_df)
     valid_code3d, valid_label = get_code3d_and_label(valid_df)
 
-    all_n = len(train_label)
-    n_pos = np.sum(train_label)
-    n_neg = all_n - n_pos
-
-    beta = n_neg/n_pos
-
-    # sample_weights = compute_class_weight(class_weight = 'balanced', classes = np.unique(train_label), y = train_label)
-
-    # weight_dict['defect'] = np.max(sample_weights)
-    # weight_dict['clean'] = np.min(sample_weights)
-
-
     word2vec_file_dir = os.path.join(w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
 
     word2vec = Word2Vec.load(word2vec_file_dir)
@@ -168,8 +139,7 @@ def train_model(dataset_name):
         word_att_dim=word_att_dim,
         sent_att_dim=sent_att_dim,
         use_layer_norm=use_layer_norm,
-        dropout=dropout,
-        beta = beta)
+        dropout=dropout)
 
     model = model.cuda()
     model.sent_attention.word_attention.freeze_embeddings(False)

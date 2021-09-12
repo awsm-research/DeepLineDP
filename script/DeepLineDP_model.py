@@ -11,7 +11,7 @@ import pandas as pd
 
 # Model structure
 class HierarchicalAttentionNetwork(nn.Module):
-    def __init__(self, num_classes, vocab_size, embed_dim, word_gru_hidden_dim, sent_gru_hidden_dim, word_gru_num_layers, sent_gru_num_layers, word_att_dim, sent_att_dim, use_layer_norm, dropout, beta):
+    def __init__(self, num_classes, vocab_size, embed_dim, word_gru_hidden_dim, sent_gru_hidden_dim, word_gru_num_layers, sent_gru_num_layers, word_att_dim, sent_att_dim, use_layer_norm, dropout):
         """
         :param num_classes: number of classes
         :param vocab_size: number of words in the vocabulary of the model
@@ -24,7 +24,6 @@ class HierarchicalAttentionNetwork(nn.Module):
         :param sent_att_dim: dimension of sentence-level attention layer
         :param use_layer_norm: whether to use layer normalization
         :param dropout: dropout rate; 0 to not use dropout
-        :param beta: the ratio of #negative class / #positive class
         """
         super(HierarchicalAttentionNetwork, self).__init__()
 
@@ -43,7 +42,6 @@ class HierarchicalAttentionNetwork(nn.Module):
         # NOTE MODIFICATION (FEATURES)
         self.use_layer_nome = use_layer_norm
         self.dropout = dropout
-        self.beta = beta
 
 #     def forward(self, docs, doc_lengths, sent_lengths):
     def forward(self, docs):
@@ -80,14 +78,7 @@ class HierarchicalAttentionNetwork(nn.Module):
         # scores = self.out(self.fc(doc_embeds)) # option 1
         scores = self.fc(doc_embeds) # option 2
         final_scrs = self.sig(scores)
-        
-        # print('beta = ',self.beta)
-        # print('before calibration')
-        # print(final_scrs)
-        final_scrs = final_scrs / (final_scrs + ((1-final_scrs)/self.beta))
-        # print('after calibration')
-        # print(final_scrs)
-#         return scores, word_att_weights, sent_att_weights
+
         return final_scrs, word_att_weights, sent_att_weights
 
 class SentenceAttention(nn.Module):

@@ -56,7 +56,11 @@ include_blank_line = args.include_blank_line
 include_test_file = args.include_test_file
 
 # dir_suffix = 'no-abs-rebalancing-adaptive-ratio2-with-comment'
-dir_suffix = 'rebalancing-adaptive-ratio2'
+# dir_suffix = 'rebalancing-adaptive-ratio2'
+
+# dir_suffix = 'correct_prob'
+
+dir_suffix = 'train-test-subsequent-release'
 
 if include_comment:
     dir_suffix = dir_suffix + '-with-comment'
@@ -86,16 +90,6 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
 
     train_rel = all_train_releases[dataset_name]
     test_rel = all_eval_releases[dataset_name][1:]
-    
-    train_df = get_df(train_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
-
-    _, train_label = get_code3d_and_label(train_df)
-
-    all_n = len(train_label)
-    n_pos = np.sum(train_label)
-    n_neg = all_n - n_pos
-
-    beta = n_neg/n_pos
 
     w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
 
@@ -123,8 +117,7 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
         word_att_dim=word_att_dim,
         sent_att_dim=sent_att_dim,
         use_layer_norm=use_layer_norm,
-        dropout=dropout,
-        beta = beta)
+        dropout=dropout)
 
     if exp_name == '':
         checkpoint = torch.load(actual_save_model_dir+'checkpoint_'+target_epochs+'epochs.pth')
