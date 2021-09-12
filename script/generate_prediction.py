@@ -9,8 +9,6 @@ from gensim.models import Word2Vec
 
 from tqdm import tqdm
 
-from sklearn.utils import compute_class_weight
-
 from DeepLineDP_model import *
 from my_util import *
 
@@ -19,18 +17,14 @@ torch.manual_seed(0)
 arg = argparse.ArgumentParser()
 
 arg.add_argument('-dataset',type=str, default='activemq', help='software project name (lowercase)')
-arg.add_argument('-batch_size', type=int, default=32)
-arg.add_argument('-num_epochs', type=int, default=100)
 arg.add_argument('-embed_dim', type=int, default=50, help='word embedding size')
 arg.add_argument('-word_gru_hidden_dim', type=int, default=64, help='word attention hidden size')
 arg.add_argument('-sent_gru_hidden_dim', type=int, default=64, help='sentence attention hidden size')
 arg.add_argument('-word_gru_num_layers', type=int, default=1, help='number of GRU layer at word level')
 arg.add_argument('-sent_gru_num_layers', type=int, default=1, help='number of GRU layer at sentence level')
-arg.add_argument('-dropout', type=float, default=0.5, help='dropout rate')
-arg.add_argument('-lr', type=float, default=0.001, help='learning rate')
 arg.add_argument('-exp_name',type=str,default='')
 arg.add_argument('-target_epochs',type=str,default='100')
-
+arg.add_argument('-dropout', type=float, default=0.5, help='dropout rate')
 arg.add_argument('-include_comment',action='store_true')
 arg.add_argument('-include_blank_line',action='store_true')
 arg.add_argument('-include_test_file',action='store_true')
@@ -40,8 +34,8 @@ args = arg.parse_args()
 weight_dict = {}
 
 # model setting
-batch_size = args.batch_size
-num_epochs = args.num_epochs
+# batch_size = args.batch_size
+# num_epochs = args.num_epochs
 max_grad_norm = 5
 embed_dim = args.embed_dim
 word_gru_hidden_dim = args.word_gru_hidden_dim
@@ -52,7 +46,7 @@ word_att_dim = 64
 sent_att_dim = 64
 use_layer_norm = True
 dropout = args.dropout
-lr = args.lr
+# lr = args.lr
 
 save_every_epochs = 5
 exp_name = args.exp_name
@@ -73,6 +67,8 @@ if include_blank_line:
 if include_test_file:
     dir_suffix = dir_suffix + '-with-test-file'
 
+dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
+
 intermediate_output_dir = '../output/intermediate_output/DeepLineDP/'+dir_suffix+'/'
 save_model_dir = '../output/model/DeepLineDP/'+dir_suffix+'/'
 prediction_dir = '../output/prediction/DeepLineDP/'+dir_suffix+'/'
@@ -91,6 +87,16 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
     train_rel = all_train_releases[dataset_name]
     test_rel = all_eval_releases[dataset_name][1:]
     
+    train_df = get_df(train_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
+
+    _, train_label = get_code3d_and_label(train_df)
+
+    all_n = len(train_label)
+    n_pos = np.sum(train_label)
+    n_neg = all_n - n_pos
+
+    beta = n_neg/n_pos
+
     w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
 
     word2vec_file_dir = os.path.join(w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
@@ -117,7 +123,8 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
         word_att_dim=word_att_dim,
         sent_att_dim=sent_att_dim,
         use_layer_norm=use_layer_norm,
-        dropout=dropout)
+        dropout=dropout,
+        beta = beta)
 
     if exp_name == '':
         checkpoint = torch.load(actual_save_model_dir+'checkpoint_'+target_epochs+'epochs.pth')

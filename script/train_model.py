@@ -1,6 +1,7 @@
 import os, re, argparse
 
 import torch.optim as optim
+# from torch.utils.data import WeightedRandomSampler
 
 import numpy as np
 import pandas as pd
@@ -9,7 +10,7 @@ from gensim.models import Word2Vec
 
 from tqdm import tqdm
 
-from sklearn.utils import compute_class_weight
+# from sklearn.utils import compute_class_weight
 
 from DeepLineDP_model import *
 from my_util import *
@@ -63,7 +64,8 @@ include_blank_line = args.include_blank_line
 include_test_file = args.include_test_file
 
 # dir_suffix = 'no-abs-rebalancing-adaptive-ratio2-with-comment'
-dir_suffix = 'rebalancing-adaptive-ratio2'
+# dir_suffix = 'rebalancing-adaptive-ratio2' # wrong one...
+dir_suffix = 'correct_prob'
 
 if include_comment:
     dir_suffix = dir_suffix + '-with-comment'
@@ -74,6 +76,8 @@ if include_blank_line:
 if include_test_file:
     dir_suffix = dir_suffix + '-with-test-file'
 
+dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
+
 prediction_dir = '../output/prediction/DeepLineDP/'+dir_suffix+'/'
 save_model_dir = '../output/model/DeepLineDP/'+dir_suffix+'/'
 
@@ -81,18 +85,18 @@ file_lvl_gt = '../datasets/preprocessed_data/'
 
     
 # labels is a tensor of label
-def get_loss_weight(labels):
-    label_list = labels.cpu().numpy().squeeze().tolist()
-    weight_list = []
+# def get_loss_weight(labels):
+#     label_list = labels.cpu().numpy().squeeze().tolist()
+#     weight_list = []
 
-    for lab in label_list:
-        if lab == 0:
-            weight_list.append(weight_dict['clean'])
-        else:
-            weight_list.append(weight_dict['defect'])
+#     for lab in label_list:
+#         if lab == 0:
+#             weight_list.append(weight_dict['clean'])
+#         else:
+#             weight_list.append(weight_dict['defect'])
 
-    weight_tensor = torch.tensor(weight_list).reshape(-1,1).cuda()
-    return weight_tensor
+#     weight_tensor = torch.tensor(weight_list).reshape(-1,1).cuda()
+#     return weight_tensor
 
 
 def train_model(dataset_name):
@@ -117,15 +121,22 @@ def train_model(dataset_name):
     valid_rel = all_eval_releases[dataset_name][0]
 
     train_df = get_df(train_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
-    valid_df = get_df(train_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
+    
+    valid_df = get_df(valid_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
 
     train_code3d, train_label = get_code3d_and_label(train_df)
     valid_code3d, valid_label = get_code3d_and_label(valid_df)
 
-    sample_weights = compute_class_weight(class_weight = 'balanced', classes = np.unique(train_label), y = train_label)
+    all_n = len(train_label)
+    n_pos = np.sum(train_label)
+    n_neg = all_n - n_pos
 
-    weight_dict['defect'] = sample_weights[1]
-    weight_dict['clean'] = sample_weights[0]
+    beta = n_neg/n_pos
+
+    # sample_weights = compute_class_weight(class_weight = 'balanced', classes = np.unique(train_label), y = train_label)
+
+    # weight_dict['defect'] = np.max(sample_weights)
+    # weight_dict['clean'] = np.min(sample_weights)
 
 
     word2vec_file_dir = os.path.join(w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
@@ -157,12 +168,14 @@ def train_model(dataset_name):
         word_att_dim=word_att_dim,
         sent_att_dim=sent_att_dim,
         use_layer_norm=use_layer_norm,
-        dropout=dropout)
+        dropout=dropout,
+        beta = beta)
 
     model = model.cuda()
     model.sent_attention.word_attention.freeze_embeddings(False)
 
     optimizer = optim.Adam(params=filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
+
     criterion = nn.BCELoss()
 
     checkpoint_files = os.listdir(actual_save_model_dir)
@@ -208,9 +221,9 @@ def train_model(dataset_name):
             inputs_cuda, labels_cuda = inputs.cuda(), labels.cuda()
             output, _, __ = model(inputs_cuda)
 
-            weight_tensor = get_loss_weight(labels)
+            # weight_tensor = get_loss_weight(labels)
 
-            criterion.weight = weight_tensor
+            # criterion.weight = weight_tensor
 
             loss = criterion(output, labels_cuda.reshape(batch_size,1))
 
@@ -234,7 +247,7 @@ def train_model(dataset_name):
 
                 inputs, labels = inputs.cuda(), labels.cuda()
                 output, _, __ = model(inputs)
-
+            
                 val_loss = criterion(output, labels.reshape(batch_size,1))
 
                 val_losses.append(val_loss.item())
