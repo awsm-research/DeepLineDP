@@ -1,7 +1,7 @@
 import os, re, argparse
 
 import torch.optim as optim
-# from torch.utils.data import WeightedRandomSampler
+from torch.utils.data import WeightedRandomSampler
 
 import numpy as np
 import pandas as pd
@@ -10,7 +10,7 @@ from gensim.models import Word2Vec
 
 from tqdm import tqdm
 
-# from sklearn.utils import compute_class_weight
+from sklearn.utils import compute_class_weight
 
 from DeepLineDP_model import *
 from my_util import *
@@ -21,15 +21,16 @@ arg = argparse.ArgumentParser()
 
 arg.add_argument('-dataset',type=str, default='activemq', help='software project name (lowercase)')
 arg.add_argument('-batch_size', type=int, default=32)
-arg.add_argument('-num_epochs', type=int, default=100)
+arg.add_argument('-num_epochs', type=int, default=50)
 arg.add_argument('-embed_dim', type=int, default=50, help='word embedding size')
 arg.add_argument('-word_gru_hidden_dim', type=int, default=64, help='word attention hidden size')
 arg.add_argument('-sent_gru_hidden_dim', type=int, default=64, help='sentence attention hidden size')
 arg.add_argument('-word_gru_num_layers', type=int, default=1, help='number of GRU layer at word level')
 arg.add_argument('-sent_gru_num_layers', type=int, default=1, help='number of GRU layer at sentence level')
-arg.add_argument('-dropout', type=float, default=0.5, help='dropout rate')
+arg.add_argument('-dropout', type=float, default=0.2, help='dropout rate')
 arg.add_argument('-lr', type=float, default=0.001, help='learning rate')
 arg.add_argument('-exp_name',type=str,default='')
+# arg.add_argument('-dir_suffix',type=str,default='rebalancing-adaptive-ratio2-new-lr2')
 
 arg.add_argument('-include_comment',action='store_true')
 arg.add_argument('-include_blank_line',action='store_true')
@@ -52,7 +53,7 @@ use_layer_norm = True
 dropout = args.dropout
 lr = args.lr
 
-save_every_epochs = 5
+save_every_epochs = 1
 exp_name = args.exp_name
 
 max_train_LOC = 900
@@ -62,8 +63,9 @@ include_blank_line = args.include_blank_line
 include_test_file = args.include_test_file
 
 # dir_suffix = 'no-abs-rebalancing-adaptive-ratio2-with-comment'
-# dir_suffix = 'rebalancing-adaptive-ratio2' # wrong one...
-dir_suffix = 'train-test-subsequent-release'
+# dir_suffix = 'rebalancing-adaptive-ratio2-new-lr2'
+# dir_suffix = 'rebalancing-adaptive-ratio2'
+dir_suffix = 'rebalancing-adaptive-ratio2-lowercase'
 
 if include_comment:
     dir_suffix = dir_suffix + '-with-comment'
@@ -81,6 +83,20 @@ save_model_dir = '../output/model/DeepLineDP/'+dir_suffix+'/'
 
 file_lvl_gt = '../datasets/preprocessed_data/'
 
+weight_dict = {}
+
+def get_loss_weight(labels):
+    label_list = labels.cpu().numpy().squeeze().tolist()
+    weight_list = []
+
+    for lab in label_list:
+        if lab == 0:
+            weight_list.append(weight_dict['clean'])
+        else:
+            weight_list.append(weight_dict['defect'])
+
+    weight_tensor = torch.tensor(weight_list).reshape(-1,1).cuda()
+    return weight_tensor
 
 def train_model(dataset_name):
 
@@ -110,6 +126,25 @@ def train_model(dataset_name):
     train_code3d, train_label = get_code3d_and_label(train_df)
     valid_code3d, valid_label = get_code3d_and_label(valid_df)
 
+    sample_weights = compute_class_weight(class_weight = 'balanced', classes = np.unique(train_label), y = train_label)
+
+    # sample_weights = np.array([np.min(sample_weights), np.max(sample_weights)])
+
+    weight_dict['defect'] = np.max(sample_weights)
+    weight_dict['clean'] = np.min(sample_weights)
+    
+    # n_pos = np.sum(train_label)
+    # all_n = len(train_label)
+    # n_neg = all_n - n_pos
+    # sample_per_cls = [n_neg, n_pos]
+
+    # new_sample_weight = compute_class_weight(class_weight={0:1, 1:n_neg/n_pos}, classes = np.unique(train_label), y = train_label)
+
+    # all_train_weight = np.array([sample_weights[int(t)] for t in train_label])
+    # all_train_weight=torch.from_numpy(all_train_weight)
+
+    # sampler = WeightedRandomSampler(all_train_weight, len(all_train_weight))
+
     word2vec_file_dir = os.path.join(w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
 
     word2vec = Word2Vec.load(word2vec_file_dir)
@@ -125,8 +160,21 @@ def train_model(dataset_name):
     max_sent_len = min(max([len(sent) for sent in (x_train_vec)]), max_train_LOC)
 
     train_dl = get_dataloader(x_train_vec,train_label,batch_size,max_sent_len)
- 
+
     valid_dl = get_dataloader(x_valid_vec, valid_label,batch_size,max_sent_len)
+
+    # ## just for testing
+    # for inputs, labels in train_dl:
+    #     print(len(labels),torch.sum(labels))
+    #     break
+
+    # old_train_dl = get_dataloader(x_train_vec,train_label,batch_size,max_sent_len)
+
+    # for inputs, labels in old_train_dl:
+    #     print(len(labels),torch.sum(labels))
+    #     break
+
+    # ####################
 
     model = HierarchicalAttentionNetwork(
         num_classes=1,
@@ -167,6 +215,9 @@ def train_model(dataset_name):
         checkpoint_nums = [int(re.findall('\d+',s)[0]) for s in checkpoint_files]
         current_checkpoint_num = max(checkpoint_nums)
 
+        print(current_checkpoint_num)
+        print(actual_save_model_dir)
+
         checkpoint = torch.load(actual_save_model_dir+'checkpoint_'+str(current_checkpoint_num)+'epochs.pth')
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -191,9 +242,9 @@ def train_model(dataset_name):
             inputs_cuda, labels_cuda = inputs.cuda(), labels.cuda()
             output, _, __ = model(inputs_cuda)
 
-            # weight_tensor = get_loss_weight(labels)
+            weight_tensor = get_loss_weight(labels)
 
-            # criterion.weight = weight_tensor
+            criterion.weight = weight_tensor
 
             loss = criterion(output, labels_cuda.reshape(batch_size,1))
 
@@ -212,6 +263,7 @@ def train_model(dataset_name):
 
         with torch.no_grad():
             criterion.weight = None
+            model.eval()
             
             for inputs, labels in valid_dl:
 

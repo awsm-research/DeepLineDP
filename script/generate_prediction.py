@@ -58,9 +58,11 @@ include_test_file = args.include_test_file
 # dir_suffix = 'no-abs-rebalancing-adaptive-ratio2-with-comment'
 # dir_suffix = 'rebalancing-adaptive-ratio2'
 
-# dir_suffix = 'correct_prob'
+# dir_suffix = 'correct_prob2'
 
-dir_suffix = 'train-test-subsequent-release'
+dir_suffix = 'rebalancing-adaptive-ratio2-lowercase'
+
+# dir_suffix = 'train-test-subsequent-release'
 
 if include_comment:
     dir_suffix = dir_suffix + '-with-comment'
@@ -90,6 +92,17 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
 
     train_rel = all_train_releases[dataset_name]
     test_rel = all_eval_releases[dataset_name][1:]
+    # test_rel = [all_eval_releases[dataset_name][0]] # will remove later...
+
+    train_df = get_df(train_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
+
+    _, train_label = get_code3d_and_label(train_df)
+
+    # all_n = len(train_label)
+    # n_pos = np.sum(train_label)
+    # n_neg = all_n - n_pos
+
+    # beta = n_neg/n_pos
 
     w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
 
@@ -181,7 +194,7 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
                         'line-number': line_number
                     }
 
-                    pickle.dump(output_dict, open(save_file_path, 'wb'))
+                    # pickle.dump(output_dict, open(save_file_path, 'wb'))
                     
             else:
                 output_dict = pickle.load(open(save_file_path, 'rb'))
