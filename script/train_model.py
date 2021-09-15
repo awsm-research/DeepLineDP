@@ -21,8 +21,8 @@ arg = argparse.ArgumentParser()
 
 arg.add_argument('-dataset',type=str, default='activemq', help='software project name (lowercase)')
 arg.add_argument('-batch_size', type=int, default=32)
-arg.add_argument('-num_epochs', type=int, default=50)
-arg.add_argument('-embed_dim', type=int, default=50, help='word embedding size')
+arg.add_argument('-num_epochs', type=int, default=35)
+arg.add_argument('-embed_dim', type=int, default=30, help='word embedding size')
 arg.add_argument('-word_gru_hidden_dim', type=int, default=64, help='word attention hidden size')
 arg.add_argument('-sent_gru_hidden_dim', type=int, default=64, help='sentence attention hidden size')
 arg.add_argument('-word_gru_num_layers', type=int, default=1, help='number of GRU layer at word level')
@@ -62,9 +62,13 @@ include_comment = args.include_comment
 include_blank_line = args.include_blank_line
 include_test_file = args.include_test_file
 
+to_lowercase = True
+
 # dir_suffix = 'no-abs-rebalancing-adaptive-ratio2-with-comment'
 # dir_suffix = 'rebalancing-adaptive-ratio2-new-lr2'
 # dir_suffix = 'rebalancing-adaptive-ratio2'
+
+# change seed 0 -> 1234
 dir_suffix = 'rebalancing-adaptive-ratio2-lowercase'
 
 if include_comment:
@@ -123,8 +127,8 @@ def train_model(dataset_name):
     
     valid_df = get_df(valid_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
 
-    train_code3d, train_label = get_code3d_and_label(train_df)
-    valid_code3d, valid_label = get_code3d_and_label(valid_df)
+    train_code3d, train_label = get_code3d_and_label(train_df, to_lowercase)
+    valid_code3d, valid_label = get_code3d_and_label(valid_df, to_lowercase)
 
     sample_weights = compute_class_weight(class_weight = 'balanced', classes = np.unique(train_label), y = train_label)
 

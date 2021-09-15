@@ -12,7 +12,7 @@ from tqdm import tqdm
 from DeepLineDP_model import *
 from my_util import *
 
-torch.manual_seed(0)
+torch.manual_seed(1234) # change from 0 to 1234
 
 arg = argparse.ArgumentParser()
 
@@ -55,11 +55,14 @@ include_comment = args.include_comment
 include_blank_line = args.include_blank_line
 include_test_file = args.include_test_file
 
+to_lowercase = True
+
 # dir_suffix = 'no-abs-rebalancing-adaptive-ratio2-with-comment'
 # dir_suffix = 'rebalancing-adaptive-ratio2'
 
 # dir_suffix = 'correct_prob2'
 
+# use seed number = 1234
 dir_suffix = 'rebalancing-adaptive-ratio2-lowercase'
 
 # dir_suffix = 'train-test-subsequent-release'
@@ -91,8 +94,9 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
     actual_save_model_dir = save_model_dir+dataset_name+'/'
 
     train_rel = all_train_releases[dataset_name]
-    test_rel = all_eval_releases[dataset_name][1:]
-    # test_rel = [all_eval_releases[dataset_name][0]] # will remove later...
+    # test_rel = all_eval_releases[dataset_name][1:]
+    test_rel = [all_eval_releases[dataset_name][0]] # will remove later...
+    # test_rel = all_eval_releases[dataset_name] # include validation set
 
     train_df = get_df(train_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
 
@@ -166,7 +170,7 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
 
             code = list(df['code_line'])
 
-            code2d = prepare_code2d(code)
+            code2d = prepare_code2d(code, to_lowercase)
 
             code3d = [code2d]
 
