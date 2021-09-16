@@ -43,9 +43,9 @@ file_lvl_gt_for_baseline = '../../datasets/parsed_dataset_without_comments/'
 
 # file_lvl_gt_for_baseline = '../../datasets/java-parsed-AST-no-comment-no-varname-no-methodname/'
 
-
-# word2vec_dir = './Word2Vec_model-50dim-with-comment/'
-word2vec_dir = '../output/Word2Vec_model/'
+# word2vec_dir = '../output/Word2Vec_model/'
+word2vec_dir = '../output/Word2Vec_model_lowercase/'
+# word2vec_dir = '../output/Word2Vec_model_cross_release/'
 # word2vec_deepline_dp_file_dir = os.path.join(word2vec_dir,'DeepLineDP')
 # word2vec_baseline_file_dir = os.path.join(word2vec_dir,'baseline')
 # word2vec_deepline_dp_file_dir = os.path.join(word2vec_dir,'DeepLineDP_abs')
@@ -53,7 +53,7 @@ word2vec_dir = '../output/Word2Vec_model/'
 
 # loss_dir = './loss/'
 
-def prepare_code2d(code_list):
+def prepare_code2d(code_list, to_lowercase = False):
     '''
         input
             code_list (list): list that contains code each line (in str format)
@@ -64,6 +64,10 @@ def prepare_code2d(code_list):
 
     for c in code_list:
         c = re.sub('\\s+',' ',c)
+
+        if to_lowercase:
+            c = c.lower()
+
         token_list = c.strip().split()
         total_tokens = len(token_list)
         
@@ -87,8 +91,13 @@ def prepare_code2d(code_list):
     
 #     return code_3D_list, label
 
-def get_df(rel, include_comment=False, include_blank_line=False, include_test_files = False):
-    df = pd.read_csv(file_lvl_gt+rel+".csv")
+def get_df(rel, include_comment=False, include_blank_line=False, include_test_files = False, is_baseline=False):
+
+    if is_baseline:
+        df = pd.read_csv('../'+file_lvl_gt+rel+".csv")
+
+    else:
+        df = pd.read_csv(file_lvl_gt+rel+".csv")
     # print(df.head())
 
     df = df.fillna('')
@@ -104,7 +113,7 @@ def get_df(rel, include_comment=False, include_blank_line=False, include_test_fi
 
     return df
 
-def get_code3d_and_label(df):
+def get_code3d_and_label(df, to_lowercase = False):
     '''
         input
             df (DataFrame): a dataframe from get_df()
@@ -124,7 +133,7 @@ def get_code3d_and_label(df):
 
         code = list(group_df['code_line'])
 
-        code2d = prepare_code2d(code)
+        code2d = prepare_code2d(code, to_lowercase)
         code3d.append(code2d)
 
         all_file_label.append(file_label)
@@ -257,11 +266,15 @@ def pad_code(code_list_3d,max_sent_len,limit_sent_len=True, mode='train'):
     
 #     return code,encoded_labels # both are list of code and label
 
-def get_dataloader(code_vec, label_list,batch_size, max_sent_len):
+def get_dataloader(code_vec, label_list,batch_size, max_sent_len, sampler=None):
     y_tensor =  torch.cuda.FloatTensor([label for label in label_list])
     code_vec_pad = pad_code(code_vec,max_sent_len)
     tensor_dataset = TensorDataset(torch.tensor(code_vec_pad), y_tensor)
-    dl = DataLoader(tensor_dataset,shuffle=True,batch_size=batch_size,drop_last=True)
+
+    if sampler is not None:
+        dl = DataLoader(tensor_dataset,batch_size=batch_size,drop_last=True, sampler=sampler)
+    else:
+        dl = DataLoader(tensor_dataset,shuffle=True,batch_size=batch_size,drop_last=True)
     
     return dl
 
@@ -276,30 +289,30 @@ def get_dataloader(code_vec, label_list,batch_size, max_sent_len):
     
 #     return code_3D_list, label
 
-def prepare_data_cross_release(rel):
-    df = pd.read_csv(file_lvl_gt+rel+'.txt',sep='\t')
-    df = df.dropna()
+# def prepare_data_cross_release(rel):
+#     df = pd.read_csv(file_lvl_gt+rel+'.txt',sep='\t')
+#     df = df.dropna()
 
-    total_samples = len(df)
-    train_samples = round(0.9*total_samples)
-    # valid_samples = total_samples-train_samples
+#     total_samples = len(df)
+#     train_samples = round(0.9*total_samples)
+#     # valid_samples = total_samples-train_samples
     
-    df_shuffled=shuffle(df, random_state=0)
+#     df_shuffled=shuffle(df, random_state=0)
 
-    code = list(df['Code'])
+#     code = list(df['Code'])
 
-    train_code = code[:train_samples]
-    valid_code = code[train_samples:]
+#     train_code = code[:train_samples]
+#     valid_code = code[train_samples:]
     
-    train_code_3D_list = create3DList(train_code)
-    valid_code_3D_list = create3DList(valid_code)
+#     train_code_3D_list = create3DList(train_code)
+#     valid_code_3D_list = create3DList(valid_code)
 
-    label = list(df['Bug'])
+#     label = list(df['Bug'])
 
-    train_label = label[:train_samples]
-    valid_label = label[train_samples:]
+#     train_label = label[:train_samples]
+#     valid_label = label[train_samples:]
     
-    return train_code_3D_list, valid_code_3D_list, train_label, valid_label
+#     return train_code_3D_list, valid_code_3D_list, train_label, valid_label
 
 def get_x_vec(code_3d, word2vec):
     x_vec = [[[word2vec.wv.vocab[token].index if token in word2vec.wv.vocab else len(word2vec.wv.vocab) for token in text]

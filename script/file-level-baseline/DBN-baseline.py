@@ -30,83 +30,145 @@ args = arg.parse_args()
 # model parameter
 batch_size = 30
 hidden_layers_structure = [100]*10
+embed_dim = 50
 
-save_model_dir = './baseline-model-DBN/'
-save_prediction_dir = './prediction-DBN/'
+# save_model_dir = './baseline-model-DBN/'
+# save_prediction_dir = './prediction-DBN/'
 
-if not os.path.exists(save_model_dir):
-    os.makedirs(save_model_dir)
+# if not os.path.exists(save_model_dir):
+#     os.makedirs(save_model_dir)
 
-if not os.path.exists(save_prediction_dir):
-    os.makedirs(save_prediction_dir)
+# if not os.path.exists(save_prediction_dir):
+#     os.makedirs(save_prediction_dir)
 
-def pad_features(codevec, seq_length):
-    ''' padded codevec with 0's or truncated to the input seq_length.
+include_comment = True
+include_blank_line = False
+include_test_file = False
+
+to_lowercase = True
+
+dir_suffix = 'lowercase'
+exp_name = ''
+
+if include_comment:
+    dir_suffix = dir_suffix + '-with-comment'
+
+if include_blank_line:
+    dir_suffix = dir_suffix + '-with-blank-line'
+
+if include_test_file:
+    dir_suffix = dir_suffix + '-with-test-file'
+
+dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
+
+
+save_model_dir = '../../output/model/DBN/'
+save_prediction_dir = '../../output/prediction/DBN/'
+
+def pad_features(codevec, padding_idx, seq_length):
+    ''' Return features of review_ints, where each review is padded with 0's 
+        or truncated to the input seq_length.
     '''
     ## getting the correct rows x cols shape
     features = np.zeros((len(codevec), seq_length), dtype=int)
-
+    
+    ## for each review, I grab that review
     for i, row in enumerate(codevec):
         if len(row) > seq_length:
             features[i,:] = row[:seq_length]
         else:
-            features[i, :] = row + [0]* (seq_length - len(row))
-
+            features[i, :] = row + [padding_idx]* (seq_length - len(row))
+    
     return features
 
-def convert_to_token_index(w2v_model, code, max_seq_len):
+def convert_to_token_index(w2v_model, code, padding_idx):
     codevec = []
     
     for c in code:
         codevec.append([w2v_model.wv.vocab[word].index if word in w2v_model.wv.vocab else len(w2v_model.wv.vocab) for word in c.split()])
 
-    features = pad_features(codevec, seq_length=max_seq_len)
+    max_seq_len = min(max([len(cv) for cv in codevec]),45000)
+
+    features = pad_features(codevec, padding_idx, seq_length=max_seq_len)
      
     return features
 
-def get_max_code_length(dataset_name, w2v_model):
-    train_releases = all_train_releases[dataset_name]
-    eval_rel = all_eval_releases[dataset_name][1:]
+def prepare_data_for_LSTM(df, to_lowercase = False):
+    '''
+        input
+            df (DataFrame): input data from get_df() function
+        output
+            all_code_str (list): a list of source code in string format
+            all_file_label (list): a list of label
+    '''
+    all_code_str = []
+    all_file_label = []
 
-    train_df = get_df_for_baseline(train_releases)
-    code, _ = get_data_and_label(train_df)
+    for filename, group_df in df.groupby('filename'):
+        # print(filename)
+        # print(group_df)
+
+        file_label = bool(group_df['file-label'].unique())
+
+        code = list(group_df['code_line'])
+
+        code_str = '\n'.join(code)
+
+        if to_lowercase:
+            code_str = code_str.lower()
+
+        all_code_str.append(code_str)
+
+        all_file_label.append(file_label)
+
+    return all_code_str, all_file_label
+
+# def get_max_code_length(dataset_name, w2v_model):
+#     train_releases = all_train_releases[dataset_name]
+#     eval_rel = all_eval_releases[dataset_name][1:]
+
+#     train_df = get_df_for_baseline(train_releases)
+#     code, _ = get_data_and_label(train_df)
     
-    codevec = []
+#     codevec = []
     
-    for c in code:
-        codevec.append([w2v_model.wv.vocab[word].index if word in w2v_model.wv.vocab else len(w2v_model.wv.vocab) for word in c.split()])
+#     for c in code:
+#         codevec.append([w2v_model.wv.vocab[word].index if word in w2v_model.wv.vocab else len(w2v_model.wv.vocab) for word in c.split()])
             
-    max_seq_len = max([len(cv) for cv in codevec])
+#     max_seq_len = min(max([len(cv) for cv in codevec]),45000)
     
-    for rel in eval_rel:
-        test_df = get_df_for_baseline(rel)
-        code, _ = get_data_and_label(test_df)
-        
-        codevec = []
     
-        for c in code:
-            codevec.append([w2v_model.wv.vocab[word].index if word in w2v_model.wv.vocab else len(w2v_model.wv.vocab) for word in c.split()])
-
-        max_seq_len = max([len(cv) for cv in codevec])
-    
-    if max_seq_len > 125000:
-        max_seq_len = 125000
-        
-    return max_seq_len
+#     return max_seq_len
 
 def train_model(dataset_name):
-    train_releases = all_train_releases[dataset_name]
-    
-    train_df = get_df_for_baseline(train_releases)
-    code,encoded_labels = get_data_and_label(train_df)
+    loss_dir = '../output/loss/DBN/'+dir_suffix+'/'
+    actual_save_model_dir = save_model_dir+dataset_name+'/'
 
-    word2vec_file_dir = os.path.join('.'+word2vec_baseline_file_dir,dataset_name+'.bin')
+    if not exp_name == '':
+        actual_save_model_dir = actual_save_model_dir+exp_name+'/'
+        loss_dir = loss_dir + exp_name
 
-    word2vec_model = Word2Vec.load(word2vec_file_dir)
-        
-    max_seq_len = get_max_code_length(dataset_name, word2vec_model)
-    
-    token_idx = convert_to_token_index(word2vec_model, code, max_seq_len)
+    if not os.path.exists(actual_save_model_dir):
+        os.makedirs(actual_save_model_dir)
+
+    if not os.path.exists(loss_dir):
+        os.makedirs(loss_dir)
+
+    w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
+    # w2v_dir = '../'+w2v_dir
+    w2v_dir = os.path.join('../'+w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
+
+    train_rel = all_train_releases[dataset_name]
+
+    train_df = get_df(train_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line, is_baseline=True)
+
+    train_code, train_label = prepare_data_for_LSTM(train_df, to_lowercase = to_lowercase)
+
+    word2vec_model = Word2Vec.load(w2v_dir)
+
+    padding_idx = word2vec_model.wv.vocab['<pad>'].index
+
+    token_idx = convert_to_token_index(word2vec_model, train_code, padding_idx)
 
     scaler = MinMaxScaler(feature_range=(0,1))
     features = scaler.fit_transform(token_idx)
@@ -119,13 +181,13 @@ def train_model(dataset_name):
              batch_size=batch_size,
              activation_function='sigmoid')
     
-    dbn_clf.fit(features,encoded_labels)
+    dbn_clf.fit(features,train_label)
     
     dbn_features = dbn_clf.transform(features)
     
     rf_clf = RandomForestClassifier(n_jobs=24)
     
-    rf_clf.fit(dbn_features,encoded_labels)
+    rf_clf.fit(dbn_features,train_label)
     
     pickle.dump(dbn_clf,open(save_model_dir+dataset_name+'-DBN.pkl','wb'))
     pickle.dump(rf_clf,open(save_model_dir+dataset_name+'-RF.pkl','wb'))

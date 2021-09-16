@@ -21,6 +21,7 @@ arg = argparse.ArgumentParser()
 arg.add_argument('-dataset',type=str, default='activemq', help='software project name (lowercase)')
 arg.add_argument('-epochs', type=int, default=100)
 arg.add_argument('-target_epochs', type=str, default=100, help='which epoch of model to load')
+arg.add_argument('-exp_name',type=str,default='')
 arg.add_argument('-train',action='store_true')
 arg.add_argument('-predict',action='store_true')
 
@@ -30,29 +31,49 @@ torch.manual_seed(0)
 
 # model parameters
 
-batch_size = 8
+batch_size = 32
 output_size = 1
-embedding_dim = 50
-hidden_dim = 256
+embed_dim = 50
+hidden_dim = 64
 lr = 0.001
 epochs = args.epochs
 
-criterion = nn.BCELoss()
+exp_name = args.exp_name
 
-
-save_every_epochs = 1 # default is 5
+save_every_epochs = 2 # default is 5
 
 max_seq_len = 50
 
+include_comment = True
+include_blank_line = False
+include_test_file = False
+
+to_lowercase = True
+
+dir_suffix = 'lowercase'
+
+if include_comment:
+    dir_suffix = dir_suffix + '-with-comment'
+
+if include_blank_line:
+    dir_suffix = dir_suffix + '-with-blank-line'
+
+if include_test_file:
+    dir_suffix = dir_suffix + '-with-test-file'
+
+dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
+
+
 save_model_dir = '../../output/model/Bi-LSTM/'
 save_prediction_dir = '../../output/prediction/Bi-LSTM/'
-loss_dir = '../../output/loss/Bi-LSTM/'
+# loss_dir = '../../output/loss/Bi-LSTM/'
 
-if not os.path.exists(save_prediction_dir):
-    os.makedirs(save_prediction_dir)
 
-if not os.path.exists(loss_dir):
-    os.makedirs(loss_dir)
+# if not os.path.exists(save_prediction_dir):
+#     os.makedirs(save_prediction_dir)
+
+# if not os.path.exists(loss_dir):
+#     os.makedirs(loss_dir)
 
 class LSTMClassifier(nn.Module):
     def __init__(self, batch_size, output_size, hidden_size, vocab_size, embedding_length):
@@ -79,7 +100,7 @@ class LSTMClassifier(nn.Module):
         self.lstm = nn.LSTM(embedding_length, hidden_size,bidirectional=True)
 
         # dropout layer
-        self.dropout = nn.Dropout(0.3)
+        self.dropout = nn.Dropout(0.2)
         
         # linear and sigmoid layer
         self.fc = nn.Linear(hidden_dim, output_size)
@@ -115,7 +136,7 @@ class LSTMClassifier(nn.Module):
         
         return sig_out
 
-def pad_features(codevec, seq_length):
+def pad_features(codevec, padding_idx, seq_length):
     ''' Return features of review_ints, where each review is padded with 0's 
         or truncated to the input seq_length.
     '''
@@ -127,52 +148,101 @@ def pad_features(codevec, seq_length):
         if len(row) > seq_length:
             features[i,:] = row[:seq_length]
         else:
-            features[i, :] = row + [0]* (seq_length - len(row))
+            features[i, :] = row + [padding_idx]* (seq_length - len(row))
     
     return features
 
-def get_dataloader_for_LSTM(w2v_model, code,encoded_labels):
+def get_dataloader_for_LSTM(w2v_model, code,encoded_labels, padding_idx):
+    '''
+        input
+            w2v_model (Word2Vec)
+            code (list of string)
+            encoded_labels (list)
+        output
+
+    '''
     codevec = []
     for c in code:
         codevec.append([w2v_model.wv.vocab[word].index if word in w2v_model.wv.vocab else len(w2v_model.wv.vocab) for word in c.split()])
 
-    max_seq_len = max([len(cv) for cv in codevec])
-
     # to prevent out of memory error
-    if max_seq_len > 40000:
-        max_seq_len = 40000
+    max_seq_len = min(max([len(cv) for cv in codevec]),45000)
         
-    features = pad_features(codevec, seq_length=max_seq_len)
-    tensor_data = TensorDataset(torch.from_numpy(features), torch.from_numpy(encoded_labels))
+    features = pad_features(codevec, padding_idx, seq_length=max_seq_len)
+    tensor_data = TensorDataset(torch.from_numpy(features), torch.from_numpy(np.array(encoded_labels).astype(int)))
     dl = DataLoader(tensor_data, shuffle=True, batch_size=batch_size,drop_last=True)
+
     return dl
+
+def prepare_data_for_LSTM(df, to_lowercase = False):
+    '''
+        input
+            df (DataFrame): input data from get_df() function
+        output
+            all_code_str (list): a list of source code in string format
+            all_file_label (list): a list of label
+    '''
+    all_code_str = []
+    all_file_label = []
+
+    for filename, group_df in df.groupby('filename'):
+        # print(filename)
+        # print(group_df)
+
+        file_label = bool(group_df['file-label'].unique())
+
+        code = list(group_df['code_line'])
+
+        code_str = '\n'.join(code)
+
+        if to_lowercase:
+            code_str = code_str.lower()
+
+        all_code_str.append(code_str)
+
+        all_file_label.append(file_label)
+
+    return all_code_str, all_file_label
 
 def train_model(dataset_name):
 
+    loss_dir = '../output/loss/Bi-LSTM/'+dir_suffix+'/'
     actual_save_model_dir = save_model_dir+dataset_name+'/'
+
+    if not exp_name == '':
+        actual_save_model_dir = actual_save_model_dir+exp_name+'/'
+        loss_dir = loss_dir + exp_name
 
     if not os.path.exists(actual_save_model_dir):
         os.makedirs(actual_save_model_dir)
 
-    train_release = all_train_releases[dataset_name]
-    valid_release = all_eval_releases[dataset_name][0]
+    if not os.path.exists(loss_dir):
+        os.makedirs(loss_dir)
+
+    w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
+    # w2v_dir = '../'+w2v_dir
+    w2v_dir = os.path.join('../'+w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
+
+    train_rel = all_train_releases[dataset_name]
+    valid_rel = all_eval_releases[dataset_name][0]
+
+    train_df = get_df(train_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line, is_baseline=True)
     
-    train_df = get_df_for_baseline(train_release)
-    train_code, train_encoded_labels = get_data_and_label(train_df)
+    valid_df = get_df(valid_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line, is_baseline=True)
 
-    valid_df = get_df_for_baseline(valid_release)
-    valid_code, valid_encoded_labels = get_data_and_label(valid_df)
+    train_code, train_label = prepare_data_for_LSTM(train_df, to_lowercase = to_lowercase)
+    valid_code, valid_label = prepare_data_for_LSTM(valid_df, to_lowercase = to_lowercase)
 
-    word2vec_file_dir = os.path.join('.'+word2vec_baseline_file_dir,dataset_name+'.bin')
+    word2vec_model = Word2Vec.load(w2v_dir)
 
-    word2vec_model = Word2Vec.load(word2vec_file_dir)
-    
+    padding_idx = word2vec_model.wv.vocab['<pad>'].index
+
     vocab_size = len(word2vec_model.wv.vocab)+1
         
-    train_dl = get_dataloader_for_LSTM(word2vec_model, train_code,train_encoded_labels)
-    valid_dl = get_dataloader_for_LSTM(word2vec_model, valid_code,valid_encoded_labels)
+    train_dl = get_dataloader_for_LSTM(word2vec_model, train_code,train_label, padding_idx)
+    valid_dl = get_dataloader_for_LSTM(word2vec_model, valid_code,valid_label, padding_idx)
 
-    net = LSTMClassifier(batch_size, output_size, hidden_dim, vocab_size, embedding_dim)
+    net = LSTMClassifier(batch_size, output_size, hidden_dim, vocab_size, embed_dim)
 
     net = net.cuda()
     
@@ -188,7 +258,7 @@ def train_model(dataset_name):
 
     # no model is trained 
     if total_checkpoints == 0:
-        word2vec_weights = get_w2v_weight_for_deep_learning_models(word2vec_model, embedding_dim)
+        word2vec_weights = get_w2v_weight_for_deep_learning_models(word2vec_model, embed_dim)
         net.word_embeddings.weight = nn.Parameter(word2vec_weights)
 
         current_checkpoint_num = 1
@@ -247,6 +317,8 @@ def train_model(dataset_name):
 
         with torch.no_grad():
 
+            net.eval()
+
             for inputs, labels in valid_dl:
 
                 inputs, labels = inputs.cuda(), labels.cuda()
@@ -266,12 +338,14 @@ def train_model(dataset_name):
                         }, 
                         actual_save_model_dir+'checkpoint_'+str(e)+'epochs.pth')
 
+        # break
+
         loss_df = pd.DataFrame()
         loss_df['epoch'] = np.arange(1,len(train_loss_all_epochs)+1)
         loss_df['train_loss'] = train_loss_all_epochs
         loss_df['valid_loss'] = val_loss_all_epochs
     
-    loss_df.to_csv(loss_dir+dataset_name+'-Bi-LSTM-loss_record.csv',index=False)
+        loss_df.to_csv(loss_dir+dataset_name+'-Bi-LSTM-loss_record.csv',index=False)
 
     print('finished training model of',dataset_name)
 
