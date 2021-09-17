@@ -1,5 +1,3 @@
-# run passed
-
 import torch.nn as nn
 import torch
 import torch.optim as optim
@@ -7,7 +5,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from torch.nn import functional as F
 
 import pandas as pd
-import os, sys ,argparse
+import os, sys ,argparse, re
 
 from gensim.models import Word2Vec
 
@@ -20,7 +18,8 @@ from my_util import *
 arg = argparse.ArgumentParser()
 arg.add_argument('-dataset',type=str, default='activemq', help='software project name (lowercase)')
 arg.add_argument('-epochs', type=int, default=30)
-arg.add_argument('-target_epochs', type=str, default=100, help='which epoch of model to load')
+arg.add_argument('-target_epochs', type=str, default='6', help='which epoch of model to load')
+arg.add_argument('-exp_name',type=str,default='')
 arg.add_argument('-train',action='store_true')
 arg.add_argument('-predict',action='store_true')
 
@@ -29,29 +28,49 @@ args = arg.parse_args()
 
 # model parameters
 
-batch_size = 8
-seq_length = 7000 # max length of all code in the whole dataset
+batch_size = 32
 output_size = 1
-embedding_dim = 100
+embed_dim = 50
 n_filters = 100
 kernel_size = [5,5] # for 2 conv layers
 lr = 0.001
 
-criterion = nn.BCELoss()
-
 epochs = args.epochs # default is 100
-save_every_epochs = 5 # default is 5
+save_every_epochs = 2 # default is 5
 max_seq_len = 50 # number of tokens of each line in a file
+max_train_LOC = 900 # max length of all code in the whole dataset
 
-save_model_dir = './baseline-model-CNN/'
-save_prediction_dir = './prediction-CNN/'
+exp_name = args.exp_name
 
+save_every_epochs = 2 # default is 5
+
+
+include_comment = True
+include_blank_line = False
+include_test_file = False
+
+to_lowercase = True
+
+dir_suffix = 'lowercase'
+
+if include_comment:
+    dir_suffix = dir_suffix + '-with-comment'
+
+if include_blank_line:
+    dir_suffix = dir_suffix + '-with-blank-line'
+
+if include_test_file:
+    dir_suffix = dir_suffix + '-with-test-file'
+
+dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
+
+
+save_model_dir = '../../output/model/CNN/'
+save_prediction_dir = '../../output/prediction/CNN/'
+    
 if not os.path.exists(save_prediction_dir):
     os.makedirs(save_prediction_dir)
 
-if not os.path.exists(loss_dir):
-    os.makedirs(loss_dir)
-    
 class CNN(nn.Module):
     def __init__(self, batch_size, output_size, in_channels, out_channels, kernel_heights, keep_probab, vocab_size, embedding_dim):
         super(CNN, self).__init__()
@@ -118,70 +137,195 @@ class CNN(nn.Module):
         return sig_out
                                             
 
-def pad_code(code_list_3d,max_sent_len):
-    paded = []
+# def pad_code(code_list_3d,max_sent_len):
+#     paded = []
     
-    for file in code_list_3d:
-        sent_list = []
-        for line in file:
-            new_line = line
-            if len(line) > max_seq_len:
-                new_line = line[:max_seq_len]
-            else:
-                new_line = line+[0]*(max_seq_len - len(line))
-            sent_list.extend(new_line)
+#     for file in code_list_3d:
+#         sent_list = []
+#         for line in file:
+#             new_line = line
+#             if len(line) > max_seq_len:
+#                 new_line = line[:max_seq_len]
+#             else:
+#                 new_line = line+[0]*(max_seq_len - len(line))
+#             sent_list.extend(new_line)
             
-        if max_sent_len-len(file) > 0:
-            for i in range(0,max_sent_len-len(file)):
-                sent_list.extend([0]*max_seq_len)
+#         if max_sent_len-len(file) > 0:
+#             for i in range(0,max_sent_len-len(file)):
+#                 sent_list.extend([0]*max_seq_len)
                 
-        paded.append(sent_list[:max_sent_len])
+#         paded.append(sent_list[:max_sent_len])
 
-    return paded
+#     return paded
 
 
-def get_dataloader_for_CNN(word2vec, code,encoded_labels):
-    
-    code3d = create3DList(code)
-    
-    codevec = [[[word2vec.wv.vocab[token].index if token in word2vec.wv.vocab else len(word2vec.wv.vocab) for token in text] for text in texts] for texts in code3d]
+# def get_dataloader_for_CNN(code3d, encoded_labels, word2vec):
+
+#     codevec = [[[word2vec.wv.vocab[token].index if token in word2vec.wv.vocab else len(word2vec.wv.vocab) for token in text] for text in texts] for texts in code3d]
         
-    max_sent_len = max([len(sent) for sent in (codevec)])
-    features = pad_code(codevec,max_sent_len) # actually 555 can be any number
+#     max_sent_len = min([len(sent) for sent in (codevec)],45000)
 
-    tensor_data = TensorDataset(torch.tensor(features), torch.from_numpy(encoded_labels))
+#     features = pad_code(codevec,max_sent_len) # actually 555 can be any number
+
+#     tensor_data = TensorDataset(torch.tensor(features), torch.from_numpy(encoded_labels))
+
+#     dl = DataLoader(tensor_data, shuffle=True, batch_size=batch_size,drop_last=True)
+
+#     return dl
+
+def pad_features(codevec, padding_idx, seq_length):
+    ''' Return features of review_ints, where each review is padded with 0's 
+        or truncated to the input seq_length.
+    '''
+    ## getting the correct rows x cols shape
+    features = np.zeros((len(codevec), seq_length), dtype=int)
+    
+    ## for each review, I grab that review
+    for i, row in enumerate(codevec):
+        if len(row) > seq_length:
+            features[i,:] = row[:seq_length]
+        else:
+            features[i, :] = row + [padding_idx]* (seq_length - len(row))
+    
+    return features
+
+def get_code_str(code, to_lowercase):
+    '''
+        input
+            code (list): a list of code lines from dataset
+            to_lowercase (bool)
+        output
+            code_str: a code in string format
+    '''
+
+    code_str = '\n'.join(code)
+
+    if to_lowercase:
+        code_str = code_str.lower()
+
+    return code_str
+
+def get_code_vec(code, w2v_model):
+    '''
+        input
+            code (list): a list of code string (from prepare_data_for_LSTM())
+            w2v_model (Word2Vec)
+        output
+            codevec (list): a list of token index of each file
+    '''
+    codevec = []
+
+    for c in code:
+        codevec.append([w2v_model.wv.vocab[word].index if word in w2v_model.wv.vocab else len(w2v_model.wv.vocab) for word in c.split()])
+
+    return codevec
+
+def get_dataloader_for_LSTM(w2v_model, code,encoded_labels, padding_idx):
+    '''
+        input
+            w2v_model (Word2Vec)
+            code (list of string)
+            encoded_labels (list)
+        output
+
+    '''
+    codevec = get_code_vec(code, w2v_model)
+
+    # to prevent out of memory error
+    max_seq_len = min(max([len(cv) for cv in codevec]),45000)
+        
+    features = pad_features(codevec, padding_idx, seq_length=max_seq_len)
+    tensor_data = TensorDataset(torch.from_numpy(features), torch.from_numpy(np.array(encoded_labels).astype(int)))
     dl = DataLoader(tensor_data, shuffle=True, batch_size=batch_size,drop_last=True)
 
     return dl
 
+def prepare_data_for_LSTM(df, to_lowercase = False):
+    '''
+        input
+            df (DataFrame): input data from get_df() function
+        output
+            all_code_str (list): a list of source code in string format
+            all_file_label (list): a list of label
+    '''
+    all_code_str = []
+    all_file_label = []
+
+    for filename, group_df in df.groupby('filename'):
+        # print(filename)
+        # print(group_df)
+
+        file_label = bool(group_df['file-label'].unique())
+
+        code = list(group_df['code_line'])
+
+        code_str = get_code_str(code, to_lowercase)
+
+        # if to_lowercase:
+        #     code_str = code_str.lower()
+
+        all_code_str.append(code_str)
+
+        all_file_label.append(file_label)
+
+    return all_code_str, all_file_label
+
 def train_model(dataset_name):
 
+    loss_dir = '../../output/loss/CNN/'+dir_suffix+'/'
     actual_save_model_dir = save_model_dir+dataset_name+'/'
+
+    if not exp_name == '':
+        actual_save_model_dir = actual_save_model_dir+exp_name+'/'
+        loss_dir = loss_dir + exp_name
 
     if not os.path.exists(actual_save_model_dir):
         os.makedirs(actual_save_model_dir)
 
-    train_release = all_train_releases[dataset_name]
-    valid_release = all_eval_releases[dataset_name][0]
+    if not os.path.exists(loss_dir):
+        os.makedirs(loss_dir)
 
-    train_df = get_df_for_baseline(train_release)
-    train_code, train_encoded_labels = get_data_and_label(train_df)
+    w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
+    # w2v_dir = '../'+w2v_dir
+    w2v_dir = os.path.join('../'+w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
 
-    valid_df = get_df_for_baseline(valid_release)
-    valid_code, valid_encoded_labels = get_data_and_label(valid_df)
+    train_rel = all_train_releases[dataset_name]
+    valid_rel = all_eval_releases[dataset_name][0]
 
-    word2vec_file_dir = os.path.join('.'+word2vec_baseline_file_dir,dataset_name+'.bin')
-
-    word2vec_model = Word2Vec.load(word2vec_file_dir)
+    train_df = get_df(train_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line,is_baseline=True)
     
+    valid_df = get_df(valid_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line,is_baseline=True)
+
+    # train_code3d, train_label = get_code3d_and_label(train_df, to_lowercase)
+    # valid_code3d, valid_label = get_code3d_and_label(valid_df, to_lowercase)
+
+    word2vec_model = Word2Vec.load(w2v_dir)
+    
+    vocab_size = len(word2vec_model.wv.vocab)  + 1 # for unknown tokens
+
+    # x_train_vec = get_x_vec(train_code3d, word2vec_model)
+    # x_valid_vec = get_x_vec(valid_code3d, word2vec_model)
+
+    # max_sent_len = min(max([len(sent) for sent in (x_train_vec)]), max_train_LOC)
+
+    # train_dl = get_dataloader_for_CNN(train_code3d, train_label, word2vec_model)
+    # train_dl = get_dataloader(x_train_vec,train_label,batch_size,max_sent_len)
+
+    # valid_dl = get_dataloader(x_valid_vec, valid_label,batch_size,max_sent_len)
+
+    train_code, train_label = prepare_data_for_LSTM(train_df, to_lowercase = to_lowercase)
+    valid_code, valid_label = prepare_data_for_LSTM(valid_df, to_lowercase = to_lowercase)
+
+    word2vec_model = Word2Vec.load(w2v_dir)
+
+    padding_idx = word2vec_model.wv.vocab['<pad>'].index
+
     vocab_size = len(word2vec_model.wv.vocab)+1
         
-    train_dl = get_dataloader_for_CNN(word2vec_model, train_code, train_encoded_labels)
-    valid_dl = get_dataloader_for_CNN(word2vec_model, valid_code, valid_encoded_labels)
+    train_dl = get_dataloader_for_LSTM(word2vec_model, train_code,train_label, padding_idx)
+    valid_dl = get_dataloader_for_LSTM(word2vec_model, valid_code,valid_label, padding_idx)
 
-    word2vec_weights = get_w2v_weight_for_deep_learning_models(word2vec_model, embedding_dim)
-    
-    net = CNN(batch_size, 1, 1, n_filters, kernel_size, 0.5, vocab_size, embedding_dim)
+    net = CNN(batch_size, 1, 1, n_filters, kernel_size, 0.5, vocab_size, embed_dim)
 
     net = net.cuda()
     
@@ -197,7 +341,7 @@ def train_model(dataset_name):
 
     # no model is trained 
     if total_checkpoints == 0:
-        word2vec_weights = get_w2v_weight_for_deep_learning_models(word2vec_model, embedding_dim)
+        word2vec_weights = get_w2v_weight_for_deep_learning_models(word2vec_model, embed_dim)
         net.word_embeddings.weight = nn.Parameter(word2vec_weights)
 
         current_checkpoint_num = 1
@@ -250,9 +394,12 @@ def train_model(dataset_name):
             nn.utils.clip_grad_norm_(net.parameters(), clip)
             optimizer.step()
             
+            
         train_loss_all_epochs.append(np.mean(train_losses))
 
         with torch.no_grad():
+
+            net.eval()
 
             for inputs, labels in valid_dl:
 
@@ -273,6 +420,8 @@ def train_model(dataset_name):
                         }, 
                         actual_save_model_dir+'checkpoint_'+str(e)+'epochs.pth')
     
+        # break
+
         loss_df = pd.DataFrame()
         loss_df['epoch'] = np.arange(1,len(train_loss_all_epochs)+1)
         loss_df['train_loss'] = train_loss_all_epochs
@@ -280,65 +429,70 @@ def train_model(dataset_name):
         
         loss_df.to_csv(loss_dir+dataset_name+'-CNN-loss_record.csv',index=False)
 
-        print('finished training model of',dataset_name)
+    print('finished training model of',dataset_name)
 
 
 # epoch (int): which epoch to load model
 def predict_defective_files_in_releases(dataset_name, target_epochs = 100):
-
     actual_save_model_dir = save_model_dir+dataset_name+'/'
 
+    w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
+        # w2v_dir = '../'+w2v_dir
+    w2v_dir = os.path.join('../'+w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
+
     train_rel = all_train_releases[dataset_name]
-    eval_rel = all_eval_releases[dataset_name][1:]
+    eval_rels = all_eval_releases[dataset_name][1:]
 
-    word2vec_file_dir = os.path.join('.'+word2vec_baseline_file_dir,dataset_name+'.bin')
-
-    word2vec_model = Word2Vec.load(word2vec_file_dir)
+    word2vec_model = Word2Vec.load(w2v_dir)
     
     vocab_size = len(word2vec_model.wv.vocab) + 1
 
-    net = CNN(batch_size, 1, 1, n_filters, kernel_size, 0.5, vocab_size, embedding_dim)
+    net = CNN(batch_size, 1, 1, n_filters, kernel_size, 0.5, vocab_size, embed_dim)
 
     checkpoint = torch.load(actual_save_model_dir+'checkpoint_'+target_epochs+'epochs.pth')
 
     net.load_state_dict(checkpoint['model_state_dict'])
 
     net = net.cuda()
-
-    net.eval()
-
-    for rel in eval_rel:
-        test_df = get_df_for_baseline(rel)
-        code,encoded_labels = get_data_and_label(test_df)
-        test_dl = get_dataloader_for_CNN(word2vec_model, code,encoded_labels)
-
-        y_pred = []
-        y_test = []
-        y_prob = []
-
-        with torch.no_grad():
-            for inputs, labels in tqdm(test_dl):
-                inputs, labels = inputs.cuda(), labels.cuda()
-                output = net(inputs)
-
-                pred = torch.round(output)
-                
-                y_pred.extend(pred.cpu().numpy().squeeze().tolist())
-                y_test.extend(labels.cpu().numpy().squeeze().tolist())
-                y_prob.extend(output.cpu().numpy().squeeze().tolist())
-
-        prediction_df = pd.DataFrame()
-        prediction_df['train_release'] = [train_rel]*len(y_test)
-        prediction_df['test_release'] = [rel]*len(y_test)
-        prediction_df['actual'] = y_test
-        prediction_df['pred'] = y_pred
-        prediction_df['prob'] = y_prob
-
-        print('finished release',rel)
-
-        prediction_df.to_csv(save_prediction_dir+rel+'.csv',index=False)
     
-    print('-'*100,'\n')
+    net.eval()
+    
+    for rel in eval_rels:
+        row_list = []
+
+        test_df = get_df(rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line, is_baseline=True)
+
+        for filename, df in tqdm(test_df.groupby('filename')):
+
+            file_label = bool(df['file-label'].unique())
+
+            code = list(df['code_line'])
+
+            code_str = get_code_str(code, to_lowercase)
+            code_list = [code_str]
+
+            code_vec = get_code_vec(code_list, word2vec_model)
+
+            code_tensor = torch.tensor(code_vec)
+
+            output = net(code_tensor)
+            file_prob = output.item()
+            prediction = bool(round(file_prob))
+
+            row_dict = {
+                        'project': dataset_name, 
+                        'train': train_rel, 
+                        'test': rel, 
+                        'filename': filename, 
+                        'file-level-ground-truth': file_label, 
+                        'prediction-prob': file_prob, 
+                        'prediction-label': prediction
+                        }
+
+            row_list.append(row_dict)
+
+        df = pd.DataFrame(row_list)
+        df.to_csv(save_prediction_dir+rel+'-'+target_epochs+'-epochs.csv', index=False)
 
 proj_name = args.dataset
 if args.train:

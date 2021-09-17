@@ -65,7 +65,7 @@ dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
 
 
 save_model_dir = '../../output/model/Bi-LSTM/'
-save_prediction_dir = '../../output/prediction/Bi-LSTM/'+dir_suffix+'/'
+save_prediction_dir = '../../output/prediction/Bi-LSTM/'
 
 # loss_dir = '../../output/loss/Bi-LSTM/'
 
@@ -236,7 +236,7 @@ def prepare_data_for_LSTM(df, to_lowercase = False):
 
 def train_model(dataset_name):
 
-    loss_dir = '../output/loss/Bi-LSTM/'+dir_suffix+'/'
+    loss_dir = '../../output/loss/Bi-LSTM/'+dir_suffix+'/'
     actual_save_model_dir = save_model_dir+dataset_name+'/'
 
     if not exp_name == '':
@@ -405,9 +405,10 @@ def predict_defective_files_in_releases(dataset_name, target_epochs = 100):
     
     net.eval()
     
-    row_list = []
-
+    
     for rel in eval_rels:
+        row_list = []
+
         test_df = get_df(rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line, is_baseline=True)
 
         for filename, df in tqdm(test_df.groupby('filename')):
@@ -440,8 +441,10 @@ def predict_defective_files_in_releases(dataset_name, target_epochs = 100):
             row_list.append(row_dict)
 
 
-    df = pd.DataFrame(row_list)
-    df.to_csv(save_prediction_dir+rel+'-'+target_epochs+'-epochs.csv', index=False)
+        df = pd.DataFrame(row_list)
+        df.to_csv(save_prediction_dir+rel+'-'+target_epochs+'-epochs.csv', index=False)
+
+        print('finished',rel)
 
 proj_name = args.dataset
 

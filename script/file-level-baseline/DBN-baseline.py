@@ -141,18 +141,13 @@ def prepare_data_for_LSTM(df, to_lowercase = False):
 #     return max_seq_len
 
 def train_model(dataset_name):
-    loss_dir = '../output/loss/DBN/'+dir_suffix+'/'
     actual_save_model_dir = save_model_dir+dataset_name+'/'
 
     if not exp_name == '':
         actual_save_model_dir = actual_save_model_dir+exp_name+'/'
-        loss_dir = loss_dir + exp_name
 
     if not os.path.exists(actual_save_model_dir):
         os.makedirs(actual_save_model_dir)
-
-    if not os.path.exists(loss_dir):
-        os.makedirs(loss_dir)
 
     w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
     # w2v_dir = '../'+w2v_dir
