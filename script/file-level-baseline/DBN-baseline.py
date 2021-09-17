@@ -12,6 +12,8 @@ from dbn.models import SupervisedDBNClassification
 
 sys.path.append('../')
 
+from tqdm import tqdm
+
 from my_util import *
 
 arg = argparse.ArgumentParser()
@@ -81,17 +83,50 @@ def pad_features(codevec, padding_idx, seq_length):
     
     return features
 
-def convert_to_token_index(w2v_model, code, padding_idx):
+def get_code_vec(code, w2v_model):
+    '''
+        input
+            code (list): a list of code string (from prepare_data_for_LSTM())
+            w2v_model (Word2Vec)
+        output
+            codevec (list): a list of token index of each file
+    '''
     codevec = []
-    
+
     for c in code:
         codevec.append([w2v_model.wv.vocab[word].index if word in w2v_model.wv.vocab else len(w2v_model.wv.vocab) for word in c.split()])
+
+    return codevec
+
+def convert_to_token_index(w2v_model, code, padding_idx):
+    codevec = get_code_vec(code, w2v_model)
+    
+    # for c in code:
+    #     codevec.append([w2v_model.wv.vocab[word].index if word in w2v_model.wv.vocab else len(w2v_model.wv.vocab) for word in c.split()])
 
     max_seq_len = min(max([len(cv) for cv in codevec]),45000)
 
     features = pad_features(codevec, padding_idx, seq_length=max_seq_len)
      
+    print('max seq len',max_seq_len)
+
     return features
+
+def get_code_str(code, to_lowercase):
+    '''
+        input
+            code (list): a list of code lines from dataset
+            to_lowercase (bool)
+        output
+            code_str: a code in string format
+    '''
+
+    code_str = '\n'.join(code)
+
+    if to_lowercase:
+        code_str = code_str.lower()
+
+    return code_str
 
 def prepare_data_for_LSTM(df, to_lowercase = False):
     '''
@@ -191,47 +226,74 @@ def train_model(dataset_name):
 
 # epoch (int): which epoch to load model
 def predict_defective_files_in_releases(dataset_name):
+    actual_save_model_dir = save_model_dir+dataset_name+'/'
+
+    w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
+    # w2v_dir = '../'+w2v_dir
+    w2v_dir = os.path.join('../'+w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
+
     train_rel = all_train_releases[dataset_name]
     eval_rel = all_eval_releases[dataset_name][1:]
 
-    word2vec_file_dir = os.path.join(word2vec_baseline_file_dir,dataset_name+'.bin')
+    train_df = get_df(train_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line, is_baseline=True)
 
-    word2vec_model = Word2Vec.load(word2vec_file_dir)
-    
+    train_code, train_label = prepare_data_for_LSTM(train_df, to_lowercase = to_lowercase)
+
+    word2vec_model = Word2Vec.load(w2v_dir)
+
+    # find max sequence from training data (for later padding)
+    train_codevec = get_code_vec(train_code, word2vec_model)
+
+    max_seq_len = min(max([len(cv) for cv in train_codevec]),45000)    
+
+    padding_idx = word2vec_model.wv.vocab['<pad>'].index
+
     dbn_clf = pickle.load(open(save_model_dir+dataset_name+'-DBN.pkl','rb'))
     rf_clf = pickle.load(open(save_model_dir+dataset_name+'-RF.pkl','rb'))
     
-    for rel in eval_rel:
-
-        scaler = MinMaxScaler(feature_range=(0,1))
-        
-        test_df = get_df_for_baseline(rel)
-        code,encoded_labels = get_data_and_label(test_df)
-        
-        max_seq_len = get_max_code_length(dataset_name, word2vec_model)
+    scaler = MinMaxScaler(feature_range=(0,1))
     
-        token_idx = convert_to_token_index(word2vec_model, code, max_seq_len)
-        
-        features = scaler.fit_transform(token_idx)
-        
-        dbn_features = dbn_clf.transform(features)
-        
-        y_pred = rf_clf.predict(dbn_features)
-        y_prob = rf_clf.predict_proba(dbn_features)
-        y_prob = y_prob[:,1] 
-        
-        prediction_df = pd.DataFrame()
-        prediction_df['train_release'] = [train_rel]*len(encoded_labels)
-        prediction_df['test_release'] = [rel]*len(encoded_labels)
-        prediction_df['actual'] = encoded_labels
-        prediction_df['pred'] = y_pred
-        prediction_df['prob'] = y_prob
-        
+    for rel in eval_rel:
+        all_rows = []
+
+        test_df = get_df(rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line, is_baseline=True)
+
+        for filename, df in tqdm(test_df.groupby('filename')):
+
+            file_label = bool(df['file-label'].unique())
+
+            code = list(df['code_line'])
+
+            code_str = get_code_str(code, to_lowercase)
+            code_list = [code_str]
+
+            code_vec = get_code_vec(code_list, word2vec_model)
+            code_vec = pad_features(code_vec,padding_idx, max_seq_len)
+
+            features = scaler.fit_transform(code_vec)
+
+            dbn_features = dbn_clf.transform(features)
+
+            y_pred = bool(rf_clf.predict(dbn_features))
+            y_prob = rf_clf.predict_proba(dbn_features)
+            y_prob = float(y_prob[:,1])
+
+            row_dict = {
+                        'project': dataset_name, 
+                        'train': train_rel, 
+                        'test': rel, 
+                        'filename': filename, 
+                        'file-level-ground-truth': file_label, 
+                        'prediction-prob': y_prob, 
+                        'prediction-label': y_pred
+                        }
+            all_rows.append(row_dict)
+
+        df = pd.DataFrame(all_rows)
+        df.to_csv(save_prediction_dir+rel+'.csv', index=False)
+
         print('finished release',rel)
 
-        prediction_df.to_csv(save_prediction_dir+rel+'.csv',index=False)
-
-    print('-'*100,'\n')
 
 proj_name = args.dataset
 
