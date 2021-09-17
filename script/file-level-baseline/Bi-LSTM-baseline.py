@@ -439,9 +439,6 @@ def predict_defective_files_in_releases(dataset_name, target_epochs = 100):
 
             row_list.append(row_dict)
 
-            # break
-
-        break
 
     df = pd.DataFrame(row_list)
     df.to_csv(save_prediction_dir+rel+'-'+target_epochs+'-epochs.csv', index=False)
