@@ -67,6 +67,9 @@ dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
 save_model_dir = '../../output/model/DBN/'
 save_prediction_dir = '../../output/prediction/DBN/'
 
+if not os.path.exists(save_prediction_dir):
+    os.makedirs(save_prediction_dir)
+
 def pad_features(codevec, padding_idx, seq_length):
     ''' Return features of review_ints, where each review is padded with 0's 
         or truncated to the input seq_length.
@@ -98,13 +101,14 @@ def get_code_vec(code, w2v_model):
 
     return codevec
 
-def convert_to_token_index(w2v_model, code, padding_idx):
+def convert_to_token_index(w2v_model, code, padding_idx, max_seq_len = None):
     codevec = get_code_vec(code, w2v_model)
     
     # for c in code:
     #     codevec.append([w2v_model.wv.vocab[word].index if word in w2v_model.wv.vocab else len(w2v_model.wv.vocab) for word in c.split()])
 
-    max_seq_len = min(max([len(cv) for cv in codevec]),45000)
+    if max_seq_len is None:
+        max_seq_len = min(max([len(cv) for cv in codevec]),45000)
 
     features = pad_features(codevec, padding_idx, seq_length=max_seq_len)
      
@@ -226,7 +230,6 @@ def train_model(dataset_name):
 
 # epoch (int): which epoch to load model
 def predict_defective_files_in_releases(dataset_name):
-    actual_save_model_dir = save_model_dir+dataset_name+'/'
 
     w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
     # w2v_dir = '../'+w2v_dir
@@ -248,15 +251,49 @@ def predict_defective_files_in_releases(dataset_name):
 
     padding_idx = word2vec_model.wv.vocab['<pad>'].index
 
+    token_idx = convert_to_token_index(word2vec_model, train_code, padding_idx)
+
     dbn_clf = pickle.load(open(save_model_dir+dataset_name+'-DBN.pkl','rb'))
     rf_clf = pickle.load(open(save_model_dir+dataset_name+'-RF.pkl','rb'))
     
     scaler = MinMaxScaler(feature_range=(0,1))
+
+
+    scaler.fit(token_idx)
     
     for rel in eval_rel:
         all_rows = []
 
         test_df = get_df(rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line, is_baseline=True)
+
+        # test_code, test_label = prepare_data_for_LSTM(test_df, to_lowercase = to_lowercase)
+
+        # token_idx = convert_to_token_index(word2vec_model, test_code, padding_idx, max_seq_len)
+
+        # features = scaler.transform(token_idx)
+
+        # dbn_features = dbn_clf.transform(features)
+
+        # y_pred = rf_clf.predict(dbn_features)
+        # y_prob = rf_clf.predict_proba(dbn_features)
+        # y_prob = y_prob[:,1]
+
+        #                 'project': dataset_name, 
+        #                 'train': train_rel, 
+        #                 'test': rel, 
+        #                 'filename': filename, 
+        #                 'file-level-ground-truth': file_label, 
+        #                 'prediction-prob': y_prob, 
+        #                 'prediction-label': y_pred
+        # df = pd.DataFrame()
+        
+        # df['project'] = [dataset_name]*len(y_pred)
+        # df['train'] = train_rel
+        # df['test'] = rel
+        # df['filename'] = list(test_df['filename'].unique())
+        # df['file-level-ground-truth'] = test_label
+        # df['prediction-prob'] = y_prob
+        # df['prediction-label'] = y_pred
 
         for filename, df in tqdm(test_df.groupby('filename')):
 
@@ -270,7 +307,7 @@ def predict_defective_files_in_releases(dataset_name):
             code_vec = get_code_vec(code_list, word2vec_model)
             code_vec = pad_features(code_vec,padding_idx, max_seq_len)
 
-            features = scaler.fit_transform(code_vec)
+            features = scaler.transform(np.array(code_vec[0]).reshape(1,-1))
 
             dbn_features = dbn_clf.transform(features)
 
@@ -288,6 +325,7 @@ def predict_defective_files_in_releases(dataset_name):
                         'prediction-label': y_pred
                         }
             all_rows.append(row_dict)
+            # break
 
         df = pd.DataFrame(all_rows)
         df.to_csv(save_prediction_dir+rel+'.csv', index=False)
