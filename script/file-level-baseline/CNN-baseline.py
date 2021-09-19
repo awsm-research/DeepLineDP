@@ -31,8 +31,8 @@ args = arg.parse_args()
 batch_size = 32
 output_size = 1
 embed_dim = 50
-n_filters = 128      # default is 128
-kernel_size = [5,5,5] # for 3 conv layers
+n_filters = 100      # default is 100
+# kernel_size = [5,5,5] # for 3 conv layers
 lr = 0.001
 
 epochs = args.epochs # default is 100
@@ -72,7 +72,7 @@ if not os.path.exists(save_prediction_dir):
     os.makedirs(save_prediction_dir)
 
 class CNN(nn.Module):
-    def __init__(self, batch_size, output_size, in_channels, out_channels, kernel_heights, keep_probab, vocab_size, embedding_dim):
+    def __init__(self, batch_size, output_size, in_channels, out_channels,  keep_probab, vocab_size, embedding_dim):
         super(CNN, self).__init__()
         '''
         Arguments
@@ -89,23 +89,44 @@ class CNN(nn.Module):
         self.output_size = output_size
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.kernel_heights = kernel_heights
+        # self.kernel_heights = kernel_heights
         self.vocab_size = vocab_size
         self.embedding_length = embedding_dim
 
         self.word_embeddings = nn.Embedding(vocab_size, embedding_dim)
-        self.conv1 = nn.Conv2d(in_channels, out_channels, (kernel_heights[0], embedding_dim))
-        self.conv2 = nn.Conv2d(in_channels, out_channels, (kernel_heights[1], embedding_dim))
-        self.conv3 = nn.Conv2d(in_channels, out_channels, (kernel_heights[2], embedding_dim))
+
+        window_sizes=(3, 4, 5)
+
+        # num_filters = 100 (like in paper "Convolutional Neural Network for Sentence Classification")
+
+        self.convs = nn.ModuleList([
+            nn.Conv2d(1, 100, [window_size, embedding_dim])
+            for window_size in window_sizes
+        ])
+
+        # self.conv1 = nn.Conv2d(in_channels, out_channels, (kernel_heights[0], embedding_dim))
+        # self.conv2 = nn.Conv2d(in_channels, out_channels, (kernel_heights[1], embedding_dim))
+        # self.conv3 = nn.Conv2d(in_channels, out_channels, (kernel_heights[2], embedding_dim))
 
         self.dropout = nn.Dropout(keep_probab)
-        self.fc = nn.Linear(len(kernel_heights)*out_channels, output_size)
+        # self.fc = nn.Linear(len(kernel_heights)*out_channels, output_size)
+        self.fc = nn.Linear(100 * len(window_sizes), 1)
+
+        # not change to softmax because we do binary classification
         self.sig = nn.Sigmoid()
 
     def conv_block(self, input, conv_layer):
-        conv_out = conv_layer(input) # conv_out.size() = (batch_size, out_channels, dim, 1)
-        activation = F.relu(conv_out.squeeze(3)) # activation.size() = (batch_size, out_channels, dim1)
-        max_out = F.max_pool1d(activation, activation.size()[2]).squeeze(2) # maxpool_out.size() = (batch_size, out_channels)
+        # x2 = F.relu(conv(x))        # [B, F, T, 1]
+        #     x2 = torch.squeeze(x2, -1)  # [B, F, T]
+        #     x2 = F.max_pool1d(x2, x2.size(2))  # [B, F, 1]
+
+        conv_out = F.relu(conv_layer(input))
+        conv_out = torch.squeeze(conv_out,-1)
+        max_out = F.max_pool1d(conv_out, conv_out.size()[2])
+
+        # conv_out = conv_layer(input) # conv_out.size() = (batch_size, out_channels, dim, 1)
+        # activation = F.relu(conv_out.squeeze(3)) # activation.size() = (batch_size, out_channels, dim1)
+        # max_out = F.max_pool1d(activation, activation.size()[2]).squeeze(2) # maxpool_out.size() = (batch_size, out_channels)
 
         return max_out
 
@@ -127,17 +148,34 @@ class CNN(nn.Module):
         # input.size() = (batch_size, num_seq, embedding_length)
         input = input.unsqueeze(1)
         # input.size() = (batch_size, 1, num_seq, embedding_length)
-        max_out1 = self.conv_block(input, self.conv1)
-        max_out2 = self.conv_block(input, self.conv2)
-        max_out3 = self.conv_block(input, self.conv3)
+
+        xs = []
+
+        for conv in self.convs:
+            max_out = self.conv_block(input, conv)
+            xs.append(max_out)
+
+            # x2 = F.relu(conv(x))        # [B, F, T, 1]
+            # x2 = torch.squeeze(x2, -1)  # [B, F, T]
+            # x2 = F.max_pool1d(x2, x2.size(2))  # [B, F, 1]
+            # xs.append(x2)
+
+        # x = torch.cat(xs, 2)            # [B, F, window]
+        all_out = torch.cat(xs, 2)
+        all_out = all_out.view(all_out.size(0), -1) 
+
+        # max_out1 = self.conv_block(input, self.conv1)
+        # max_out2 = self.conv_block(input, self.conv2)
+        # max_out3 = self.conv_block(input, self.conv3)
 
         # all_out = torch.cat((max_out1, max_out2), 1)
-        all_out = torch.cat((max_out1, max_out2, max_out3), 1)
+        # all_out = torch.cat((max_out1, max_out2, max_out3), 1)
         # all_out.size() = (batch_size, num_kernels*out_channels)
         fc_in = self.dropout(all_out)
         # fc_in.size()) = (batch_size, num_kernels*out_channels)
         logits = self.fc(fc_in)
         sig_out = self.sig(logits)
+
         return sig_out
                                             
 
@@ -329,7 +367,7 @@ def train_model(dataset_name):
     train_dl = get_dataloader_for_LSTM(word2vec_model, train_code,train_label, padding_idx)
     valid_dl = get_dataloader_for_LSTM(word2vec_model, valid_code,valid_label, padding_idx)
 
-    net = CNN(batch_size, 1, 1, n_filters, kernel_size, 0.5, vocab_size, embed_dim)
+    net = CNN(batch_size, 1, 1, n_filters, 0.5, vocab_size, embed_dim)
 
     net = net.cuda()
     
@@ -352,6 +390,7 @@ def train_model(dataset_name):
 
         train_loss_all_epochs = []
         val_loss_all_epochs = []
+
     
     else:
         checkpoint_nums = [int(re.findall('\d+',s)[0]) for s in checkpoint_files]
@@ -398,7 +437,8 @@ def train_model(dataset_name):
             nn.utils.clip_grad_norm_(net.parameters(), clip)
             optimizer.step()
             
-            
+            # break
+
         train_loss_all_epochs.append(np.mean(train_losses))
 
         with torch.no_grad():
@@ -451,7 +491,7 @@ def predict_defective_files_in_releases(dataset_name, target_epochs = 100):
     
     vocab_size = len(word2vec_model.wv.vocab) + 1
 
-    net = CNN(batch_size, 1, 1, n_filters, kernel_size, 0.5, vocab_size, embed_dim)
+    net = CNN(batch_size, 1, 1, n_filters, 0.5, vocab_size, embed_dim)
 
     checkpoint = torch.load(actual_save_model_dir+'checkpoint_'+target_epochs+'epochs.pth')
 
