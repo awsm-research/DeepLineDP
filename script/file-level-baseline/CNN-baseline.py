@@ -31,8 +31,8 @@ args = arg.parse_args()
 batch_size = 32
 output_size = 1
 embed_dim = 50
-n_filters = 100
-kernel_size = [5,5] # for 2 conv layers
+n_filters = 128      # default is 128
+kernel_size = [5,5,5] # for 3 conv layers
 lr = 0.001
 
 epochs = args.epochs # default is 100
@@ -96,6 +96,8 @@ class CNN(nn.Module):
         self.word_embeddings = nn.Embedding(vocab_size, embedding_dim)
         self.conv1 = nn.Conv2d(in_channels, out_channels, (kernel_heights[0], embedding_dim))
         self.conv2 = nn.Conv2d(in_channels, out_channels, (kernel_heights[1], embedding_dim))
+        self.conv3 = nn.Conv2d(in_channels, out_channels, (kernel_heights[2], embedding_dim))
+
         self.dropout = nn.Dropout(keep_probab)
         self.fc = nn.Linear(len(kernel_heights)*out_channels, output_size)
         self.sig = nn.Sigmoid()
@@ -127,8 +129,10 @@ class CNN(nn.Module):
         # input.size() = (batch_size, 1, num_seq, embedding_length)
         max_out1 = self.conv_block(input, self.conv1)
         max_out2 = self.conv_block(input, self.conv2)
+        max_out3 = self.conv_block(input, self.conv3)
 
-        all_out = torch.cat((max_out1, max_out2), 1)
+        # all_out = torch.cat((max_out1, max_out2), 1)
+        all_out = torch.cat((max_out1, max_out2, max_out3), 1)
         # all_out.size() = (batch_size, num_kernels*out_channels)
         fc_in = self.dropout(all_out)
         # fc_in.size()) = (batch_size, num_kernels*out_channels)
@@ -342,7 +346,7 @@ def train_model(dataset_name):
     # no model is trained 
     if total_checkpoints == 0:
         word2vec_weights = get_w2v_weight_for_deep_learning_models(word2vec_model, embed_dim)
-        net.word_embeddings.weight = nn.Parameter(word2vec_weights)
+        net.word_embeddings.weight = nn.Parameter(word2vec_weights, requires_grad=False)
 
         current_checkpoint_num = 1
 

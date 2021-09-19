@@ -289,7 +289,7 @@ def train_model(dataset_name):
     # no model is trained 
     if total_checkpoints == 0:
         word2vec_weights = get_w2v_weight_for_deep_learning_models(word2vec_model, embed_dim)
-        net.word_embeddings.weight = nn.Parameter(word2vec_weights)
+        net.word_embeddings.weight = nn.Parameter(word2vec_weights, requires_grad=False)
 
         current_checkpoint_num = 1
 
