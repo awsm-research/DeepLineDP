@@ -78,6 +78,7 @@ class HierarchicalAttentionNetwork(nn.Module):
         # scores = self.out(self.fc(doc_embeds)) # option 1
         scores = self.fc(doc_embeds) # option 2
         final_scrs = self.sig(scores)
+        # final_scrs = final_scrs / (final_scrs + ((1-final_scrs)/self.beta))
 
         return final_scrs, word_att_weights, sent_att_weights
 

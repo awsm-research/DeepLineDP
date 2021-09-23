@@ -91,10 +91,10 @@ def train_word2vec_model(dataset_name,include_comment=False,include_test_file=Fa
 p = sys.argv[1]
 
 # print(p)
-for inc_comment in [True, False]:
-    for inc_test in [True, False]:
-        # don't forget to check dir name
-        train_word2vec_model(p,inc_comment,inc_test,50, True)
+# for inc_comment in [True, False]:
+for inc_test in [True, False]:
+    # don't forget to check dir name
+    train_word2vec_model(p,True,inc_test,50, True)
         # train_word2vec_model_cross_release(p,inc_comment,inc_test,30)
 
 # def train_word2vec_model_cross_release(dataset_name):

@@ -21,13 +21,13 @@ arg = argparse.ArgumentParser()
 
 arg.add_argument('-dataset',type=str, default='activemq', help='software project name (lowercase)')
 arg.add_argument('-batch_size', type=int, default=32)
-arg.add_argument('-num_epochs', type=int, default=35)
-arg.add_argument('-embed_dim', type=int, default=30, help='word embedding size')
+arg.add_argument('-num_epochs', type=int, default=25)
+arg.add_argument('-embed_dim', type=int, default=50, help='word embedding size')
 arg.add_argument('-word_gru_hidden_dim', type=int, default=64, help='word attention hidden size')
 arg.add_argument('-sent_gru_hidden_dim', type=int, default=64, help='sentence attention hidden size')
 arg.add_argument('-word_gru_num_layers', type=int, default=1, help='number of GRU layer at word level')
 arg.add_argument('-sent_gru_num_layers', type=int, default=1, help='number of GRU layer at sentence level')
-arg.add_argument('-dropout', type=float, default=0.2, help='dropout rate')
+arg.add_argument('-dropout', type=float, default=0.5, help='dropout rate')
 arg.add_argument('-lr', type=float, default=0.001, help='learning rate')
 arg.add_argument('-exp_name',type=str,default='')
 # arg.add_argument('-dir_suffix',type=str,default='rebalancing-adaptive-ratio2-new-lr2')
@@ -68,8 +68,7 @@ to_lowercase = True
 # dir_suffix = 'rebalancing-adaptive-ratio2-new-lr2'
 # dir_suffix = 'rebalancing-adaptive-ratio2'
 
-# change seed 0 -> 1234
-dir_suffix = 'rebalancing-adaptive-ratio2-lowercase'
+dir_suffix = 'no-rebalancing-adaptive-ratio2-lowercase'
 
 if include_comment:
     dir_suffix = dir_suffix + '-with-comment'
@@ -130,24 +129,11 @@ def train_model(dataset_name):
     train_code3d, train_label = get_code3d_and_label(train_df, to_lowercase)
     valid_code3d, valid_label = get_code3d_and_label(valid_df, to_lowercase)
 
-    sample_weights = compute_class_weight(class_weight = 'balanced', classes = np.unique(train_label), y = train_label)
+    # sample_weights = compute_class_weight(class_weight = 'balanced', classes = np.unique(train_label), y = train_label)
 
-    # sample_weights = np.array([np.min(sample_weights), np.max(sample_weights)])
-
-    weight_dict['defect'] = np.max(sample_weights)
-    weight_dict['clean'] = np.min(sample_weights)
+    # weight_dict['defect'] = np.max(sample_weights)
+    # weight_dict['clean'] = np.min(sample_weights)
     
-    # n_pos = np.sum(train_label)
-    # all_n = len(train_label)
-    # n_neg = all_n - n_pos
-    # sample_per_cls = [n_neg, n_pos]
-
-    # new_sample_weight = compute_class_weight(class_weight={0:1, 1:n_neg/n_pos}, classes = np.unique(train_label), y = train_label)
-
-    # all_train_weight = np.array([sample_weights[int(t)] for t in train_label])
-    # all_train_weight=torch.from_numpy(all_train_weight)
-
-    # sampler = WeightedRandomSampler(all_train_weight, len(all_train_weight))
 
     word2vec_file_dir = os.path.join(w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
 
@@ -246,9 +232,9 @@ def train_model(dataset_name):
             inputs_cuda, labels_cuda = inputs.cuda(), labels.cuda()
             output, _, __ = model(inputs_cuda)
 
-            weight_tensor = get_loss_weight(labels)
+            # weight_tensor = get_loss_weight(labels)
 
-            criterion.weight = weight_tensor
+            # criterion.weight = weight_tensor
 
             loss = criterion(output, labels_cuda.reshape(batch_size,1))
 
@@ -266,7 +252,7 @@ def train_model(dataset_name):
         train_loss_all_epochs.append(np.mean(train_losses))
 
         with torch.no_grad():
-            criterion.weight = None
+            # criterion.weight = None
             model.eval()
             
             for inputs, labels in valid_dl:

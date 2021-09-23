@@ -99,18 +99,19 @@ class CNN(nn.Module):
 
         # num_filters = 100 (like in paper "Convolutional Neural Network for Sentence Classification")
 
-        self.convs = nn.ModuleList([
-            nn.Conv2d(1, 100, [window_size, embedding_dim], padding=(window_size - 1, 0))
-            for window_size in window_sizes
-        ])
+        # self.convs = nn.ModuleList([
+        #     nn.Conv2d(1, 100, [window_size, embedding_dim], padding=(window_size - 1, 0))
+        #     for window_size in window_sizes
+        # ])
 
-        # self.conv1 = nn.Conv2d(in_channels, out_channels, (kernel_heights[0], embedding_dim))
+        self.conv1 = nn.Conv2d(1, 100, (5, embedding_dim), padding=(5 - 1, 0))
         # self.conv2 = nn.Conv2d(in_channels, out_channels, (kernel_heights[1], embedding_dim))
         # self.conv3 = nn.Conv2d(in_channels, out_channels, (kernel_heights[2], embedding_dim))
 
         self.dropout = nn.Dropout(keep_probab)
         # self.fc = nn.Linear(len(kernel_heights)*out_channels, output_size)
-        self.fc = nn.Linear(100 * len(window_sizes), 1)
+        # self.fc = nn.Linear(100 * len(window_sizes), 1)
+        self.fc = nn.Linear(100, 1)
 
         # not change to softmax because we do binary classification
         self.sig = nn.Sigmoid()
@@ -149,30 +150,33 @@ class CNN(nn.Module):
         input = input.unsqueeze(1)
         # input.size() = (batch_size, 1, num_seq, embedding_length)
 
-        xs = []
+        # xs = []
 
-        for conv in self.convs:
-            max_out = self.conv_block(input, conv)
-            xs.append(max_out)
+        # for conv in self.convs:
+        #     max_out = self.conv_block(input, conv)
+        #     xs.append(max_out)
 
-            # x2 = F.relu(conv(x))        # [B, F, T, 1]
-            # x2 = torch.squeeze(x2, -1)  # [B, F, T]
-            # x2 = F.max_pool1d(x2, x2.size(2))  # [B, F, 1]
-            # xs.append(x2)
+        #     # x2 = F.relu(conv(x))        # [B, F, T, 1]
+        #     # x2 = torch.squeeze(x2, -1)  # [B, F, T]
+        #     # x2 = F.max_pool1d(x2, x2.size(2))  # [B, F, 1]
+        #     # xs.append(x2)
 
-        # x = torch.cat(xs, 2)            # [B, F, window]
-        all_out = torch.cat(xs, 2)
-        all_out = all_out.view(all_out.size(0), -1) 
+        # # x = torch.cat(xs, 2)            # [B, F, window]
+        # all_out = torch.cat(xs, 2)
+        # all_out = all_out.view(all_out.size(0), -1) 
 
-        # max_out1 = self.conv_block(input, self.conv1)
+        max_out1 = self.conv_block(input, self.conv1)
+        max_out1 = max_out1.view(max_out1.size(0),-1)
         # max_out2 = self.conv_block(input, self.conv2)
         # max_out3 = self.conv_block(input, self.conv3)
 
         # all_out = torch.cat((max_out1, max_out2), 1)
         # all_out = torch.cat((max_out1, max_out2, max_out3), 1)
         # all_out.size() = (batch_size, num_kernels*out_channels)
-        fc_in = self.dropout(all_out)
+        # fc_in = self.dropout(all_out)
+        fc_in = self.dropout(max_out1)
         # fc_in.size()) = (batch_size, num_kernels*out_channels)
+        # print('fc_in size:',fc_in.shape)
         logits = self.fc(fc_in)
         sig_out = self.sig(logits)
 

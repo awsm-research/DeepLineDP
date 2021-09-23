@@ -12,7 +12,20 @@ from tqdm import tqdm
 from DeepLineDP_model import *
 from my_util import *
 
-torch.manual_seed(0) # change from 0 to 1234
+torch.manual_seed(0) 
+
+
+all_eval_rels_cross_release = {
+    'activemq': ['camel-2.10.0', 'camel-2.11.0', 'derby-10.5.1.1', 'groovy-1_6_BETA_2', 'hbase-0.95.2', 'hive-0.12.0', 'jruby-1.5.0', 'jruby-1.7.0.preview1', 'lucene-3.0.0', 'lucene-3.1', 'wicket-1.5.3'], 
+    'camel': ['activemq-5.2.0', 'activemq-5.3.0', 'activemq-5.8.0', 'derby-10.5.1.1', 'groovy-1_6_BETA_2', 'hbase-0.95.2', 'hive-0.12.0', 'jruby-1.5.0', 'jruby-1.7.0.preview1', 'lucene-3.0.0', 'lucene-3.1', 'wicket-1.5.3'], 
+    'derby': ['activemq-5.2.0', 'activemq-5.3.0', 'activemq-5.8.0', 'camel-2.10.0', 'camel-2.11.0', 'groovy-1_6_BETA_2', 'hbase-0.95.2', 'hive-0.12.0', 'jruby-1.5.0', 'jruby-1.7.0.preview1', 'lucene-3.0.0', 'lucene-3.1', 'wicket-1.5.3'], 
+    'groovy': ['activemq-5.2.0', 'activemq-5.3.0', 'activemq-5.8.0', 'camel-2.10.0', 'camel-2.11.0', 'derby-10.5.1.1', 'hbase-0.95.2', 'hive-0.12.0', 'jruby-1.5.0', 'jruby-1.7.0.preview1', 'lucene-3.0.0', 'lucene-3.1', 'wicket-1.5.3'], 
+    'hbase': ['activemq-5.2.0', 'activemq-5.3.0', 'activemq-5.8.0', 'camel-2.10.0', 'camel-2.11.0', 'derby-10.5.1.1', 'groovy-1_6_BETA_2', 'hive-0.12.0', 'jruby-1.5.0', 'jruby-1.7.0.preview1', 'lucene-3.0.0', 'lucene-3.1', 'wicket-1.5.3'], 
+    'hive': ['activemq-5.2.0', 'activemq-5.3.0', 'activemq-5.8.0', 'camel-2.10.0', 'camel-2.11.0', 'derby-10.5.1.1', 'groovy-1_6_BETA_2', 'hbase-0.95.2', 'jruby-1.5.0', 'jruby-1.7.0.preview1', 'lucene-3.0.0', 'lucene-3.1', 'wicket-1.5.3'], 
+    'jruby': ['activemq-5.2.0', 'activemq-5.3.0', 'activemq-5.8.0', 'camel-2.10.0', 'camel-2.11.0', 'derby-10.5.1.1', 'groovy-1_6_BETA_2', 'hbase-0.95.2', 'hive-0.12.0', 'lucene-3.0.0', 'lucene-3.1', 'wicket-1.5.3'], 
+    'lucene': ['activemq-5.2.0', 'activemq-5.3.0', 'activemq-5.8.0', 'camel-2.10.0', 'camel-2.11.0', 'derby-10.5.1.1', 'groovy-1_6_BETA_2', 'hbase-0.95.2', 'hive-0.12.0', 'jruby-1.5.0', 'jruby-1.7.0.preview1', 'wicket-1.5.3'], 
+    'wicket': ['activemq-5.2.0', 'activemq-5.3.0', 'activemq-5.8.0', 'camel-2.10.0', 'camel-2.11.0', 'derby-10.5.1.1', 'groovy-1_6_BETA_2', 'hbase-0.95.2', 'hive-0.12.0', 'jruby-1.5.0', 'jruby-1.7.0.preview1', 'lucene-3.0.0', 'lucene-3.1']}
+
 
 arg = argparse.ArgumentParser()
 
@@ -64,7 +77,7 @@ to_lowercase = True
 
 # dir_suffix = 'rebalancing-adaptive-ratio2-lowercase-new-lr2'
 # dir_suffix = 'rebalancing-adaptive-ratio2-lowercase'
-dir_suffix = 'no-rebalancing-adaptive-ratio2-lowercase'
+dir_suffix = 'no-rebalancing-adaptive-ratio2-lowercase-for-cross-project'
 
 # dir_suffix = 'train-test-subsequent-release'
 
@@ -79,8 +92,12 @@ if include_test_file:
 
 dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
 
-intermediate_output_dir = '../output/intermediate_output/DeepLineDP/'+dir_suffix+'/'
 save_model_dir = '../output/model/DeepLineDP/'+dir_suffix+'/'
+
+dir_suffix = 'cross-release-'+dir_suffix 
+
+intermediate_output_dir = '../output/intermediate_output/DeepLineDP/'+dir_suffix+'/'
+# save_model_dir = '../output/model/DeepLineDP/'+dir_suffix+'/'
 prediction_dir = '../output/prediction/DeepLineDP/'+dir_suffix+'/'
 
 file_lvl_gt = '../datasets/preprocessed_data/'
@@ -93,21 +110,20 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
 
     
     actual_save_model_dir = save_model_dir+dataset_name+'/'
+    actual_prediction_dir = prediction_dir+dataset_name+'/'
+    # actual_intermediate_output_dir = intermediate_output_dir+dataset_name+'/'
+
+    if not os.path.exists(actual_prediction_dir):
+        os.makedirs(actual_prediction_dir)
+
+    # if not os.path.exists(actual_intermediate_output_dir):
+    #     os.makedirs(actual_intermediate_output_dir)
 
     train_rel = all_train_releases[dataset_name]
-    test_rel = all_eval_releases[dataset_name][1:]
+    # test_rel = all_eval_releases[dataset_name][1:]
     # test_rel = [all_eval_releases[dataset_name][0]] # will remove later...
-    # test_rel = all_eval_releases[dataset_name] # include validation set
+    test_rel = all_eval_rels_cross_release[dataset_name] # not include validation set
 
-    # train_df = get_df(train_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
-
-    # _, train_label = get_code3d_and_label(train_df)
-
-    # all_n = len(train_label)
-    # n_pos = np.sum(train_label)
-    # n_neg = all_n - n_pos
-
-    # beta = n_neg/n_pos
 
     w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
 
@@ -151,12 +167,13 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
     model.eval()
 
     for rel in test_rel:
-        print('generating prediction of release:', rel)
+        print('using model from {} to generate prediction of {}'.format(train_rel,rel))
+        # print('generating prediction of release:', rel)
         
-        actual_intermediate_output_dir = intermediate_output_dir+rel+'/'
+        actual_intermediate_output_dir = intermediate_output_dir+dataset_name+'/'+train_rel+'-'+rel+'/'
 
         if not os.path.exists(actual_intermediate_output_dir):
-                os.makedirs(actual_intermediate_output_dir)
+            os.makedirs(actual_intermediate_output_dir)
 
         test_df = get_df(rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
     
@@ -180,34 +197,40 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
 
             save_file_path = actual_intermediate_output_dir+filename.replace('/','_').replace('.java','')+'_'+target_epochs+'_epochs.pkl'
             
-            if not os.path.exists(save_file_path):
-                with torch.no_grad():
-                    codevec_padded_tensor = torch.tensor(codevec_padded)
-                    output, word_att_weights, line_att_weight = model(codevec_padded_tensor)
-                    file_prob = output.item()
-                    prediction = bool(round(output.item()))
+            with torch.no_grad():
+                codevec_padded_tensor = torch.tensor(codevec_padded)
+                output, word_att_weights, line_att_weight = model(codevec_padded_tensor)
+                file_prob = output.item()
+                prediction = bool(round(output.item()))
 
-                    torch.cuda.empty_cache()
-                    
-                    output_dict = {
-                        'filename': filename,
-                        'file-label': file_label,
-                        'prob': file_prob,
-                        'pred': prediction,
-                        'word_attention_mat': word_att_weights,
-                        'line_attention_mat': line_att_weight,
-                        'line-label': line_label,
-                        'line-number': line_number
-                    }
+            # if not os.path.exists(save_file_path):
+            #     with torch.no_grad():
+            #         codevec_padded_tensor = torch.tensor(codevec_padded)
+            #         output, word_att_weights, line_att_weight = model(codevec_padded_tensor)
+            #         file_prob = output.item()
+            #         prediction = bool(round(output.item()))
 
-                    pickle.dump(output_dict, open(save_file_path, 'wb'))
+            #         torch.cuda.empty_cache()
                     
-            else:
-                output_dict = pickle.load(open(save_file_path, 'rb'))
-                file_prob = output_dict['prob']
-                prediction = output_dict['pred']
-                word_att_weights = output_dict['word_attention_mat']
-                line_att_weight = output_dict['line_attention_mat']
+            #         output_dict = {
+            #             'filename': filename,
+            #             'file-label': file_label,
+            #             'prob': file_prob,
+            #             'pred': prediction,
+            #             'word_attention_mat': word_att_weights,
+            #             'line_attention_mat': line_att_weight,
+            #             'line-label': line_label,
+            #             'line-number': line_number
+            #         }
+
+            #         pickle.dump(output_dict, open(save_file_path, 'wb'))
+                    
+            # else:
+            #     output_dict = pickle.load(open(save_file_path, 'rb'))
+            #     file_prob = output_dict['prob']
+            #     prediction = output_dict['pred']
+            #     word_att_weights = output_dict['word_attention_mat']
+            #     line_att_weight = output_dict['line_attention_mat']
 
             # break
 
@@ -266,7 +289,7 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
 
         df = pd.DataFrame(row_list)
 
-        df.to_csv(prediction_dir+rel+'-'+target_epochs+'-epochs.csv', index=False)
+        df.to_csv(actual_prediction_dir+train_rel+'-'+rel+'-'+target_epochs+'-epochs.csv', index=False)
 
         print('finished release', rel)
         # break

@@ -19,7 +19,7 @@ from my_util import *
 
 arg = argparse.ArgumentParser()
 arg.add_argument('-dataset',type=str, default='activemq', help='software project name (lowercase)')
-arg.add_argument('-epochs', type=int, default=20)
+arg.add_argument('-epochs', type=int, default=40)
 arg.add_argument('-target_epochs', type=str, default='6', help='which epoch of model to load')
 arg.add_argument('-exp_name',type=str,default='')
 arg.add_argument('-train',action='store_true')
@@ -40,7 +40,7 @@ epochs = args.epochs
 
 exp_name = args.exp_name
 
-save_every_epochs = 2 # default is 5
+save_every_epochs = 1 # default is 5
 
 max_seq_len = 50
 
@@ -288,8 +288,8 @@ def train_model(dataset_name):
 
     # no model is trained 
     if total_checkpoints == 0:
-        word2vec_weights = get_w2v_weight_for_deep_learning_models(word2vec_model, embed_dim)
-        net.word_embeddings.weight = nn.Parameter(word2vec_weights, requires_grad=False)
+        # word2vec_weights = get_w2v_weight_for_deep_learning_models(word2vec_model, embed_dim)
+        # net.word_embeddings.weight = nn.Parameter(word2vec_weights, requires_grad=False)
 
         current_checkpoint_num = 1
 

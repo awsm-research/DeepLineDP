@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 
 from sklearn.utils import shuffle
+from sklearn.model_selection import KFold
 
 max_seq_len = 50
 
@@ -22,6 +23,8 @@ all_eval_releases = {'activemq': ['activemq-5.1.0', 'activemq-5.2.0', 'activemq-
                      'lucene': ['lucene-2.9.0', 'lucene-3.0.0', 'lucene-3.1'], 
                      'wicket': ['wicket-1.3.0-beta2', 'wicket-1.5.3']}
 
+
+
 all_releases = {'activemq': ['activemq-5.0.0', 'activemq-5.1.0', 'activemq-5.2.0', 'activemq-5.3.0', 'activemq-5.8.0'], 
                      'camel': ['camel-1.4.0', 'camel-2.9.0', 'camel-2.10.0', 'camel-2.11.0'], 
                      'derby': ['derby-10.2.1.6', 'derby-10.3.1.4', 'derby-10.5.1.1'], 
@@ -32,10 +35,45 @@ all_releases = {'activemq': ['activemq-5.0.0', 'activemq-5.1.0', 'activemq-5.2.0
                      'wicket': ['wicket-1.3.0-incubating-beta-1', 'wicket-1.3.0-beta2', 'wicket-1.5.3']}
 
 
+
 all_projs = list(all_train_releases.keys())
 
-# file_lvl_gt = os.path.join(os.path.dirname(os.getcwd()),'java-parsed-AST-no-comment-no-varname-no-methodname/')
+
+# kf = KFold(n_splits=9)
+
+# all_projs_arr = np.array(all_projs)
+
+# test_rels_cross_proj = {}
+
+# for train_index, test_index in kf.split(all_projs):
+#     train_proj = all_projs_arr[test_index][0]
+#     test_projs = list(all_projs_arr[train_index])
+
+#     # print(train_proj[0])
+#     # print(list(test_projs))
+#     # break
+
+#     test_rels = []
+
+#     for proj in test_projs:
+#         cur_test_proj = all_eval_releases[proj][1:]
+
+#         test_rels.extend(cur_test_proj) 
+
+#     test_rels_cross_proj[train_proj] = test_rels
+
+# print(test_rels_cross_proj)
+
+
+    # print(all_projs_arr[test_index])
+    # print(all_projs_arr[train_index])
+
+
+    # print("TRAIN:", train_index, "TEST:", test_index)
+
+
 file_lvl_gt = '../datasets/preprocessed_data/'
+# file_lvl_gt = '../datasets/preprocessed_data_no_java_keywords/'
 # file_lvl_gt = '../datasets/parsed_dataset_without_comments/'
 # file_lvl_gt = '../datasets/abstract_code_without_comments/'
 
@@ -43,8 +81,8 @@ file_lvl_gt_for_baseline = '../../datasets/parsed_dataset_without_comments/'
 
 # file_lvl_gt_for_baseline = '../../datasets/java-parsed-AST-no-comment-no-varname-no-methodname/'
 
-# word2vec_dir = '../output/Word2Vec_model/'
 word2vec_dir = '../output/Word2Vec_model_lowercase/'
+# word2vec_dir = '../output/Word2Vec_model_lowercase_no_java_keywords/'
 # word2vec_dir = '../output/Word2Vec_model_cross_release/'
 # word2vec_deepline_dp_file_dir = os.path.join(word2vec_dir,'DeepLineDP')
 # word2vec_baseline_file_dir = os.path.join(word2vec_dir,'baseline')
