@@ -1,12 +1,8 @@
-import re, os
+import re
 
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 import pandas as pd
-import numpy as np
-
-from sklearn.utils import shuffle
-from sklearn.model_selection import KFold
 
 max_seq_len = 50
 
@@ -38,58 +34,38 @@ all_releases = {'activemq': ['activemq-5.0.0', 'activemq-5.1.0', 'activemq-5.2.0
 
 all_projs = list(all_train_releases.keys())
 
-
-# kf = KFold(n_splits=9)
-
-# all_projs_arr = np.array(all_projs)
-
-# test_rels_cross_proj = {}
-
-# for train_index, test_index in kf.split(all_projs):
-#     train_proj = all_projs_arr[test_index][0]
-#     test_projs = list(all_projs_arr[train_index])
-
-#     # print(train_proj[0])
-#     # print(list(test_projs))
-#     # break
-
-#     test_rels = []
-
-#     for proj in test_projs:
-#         cur_test_proj = all_eval_releases[proj][1:]
-
-#         test_rels.extend(cur_test_proj) 
-
-#     test_rels_cross_proj[train_proj] = test_rels
-
-# print(test_rels_cross_proj)
-
-
-    # print(all_projs_arr[test_index])
-    # print(all_projs_arr[train_index])
-
-
-    # print("TRAIN:", train_index, "TEST:", test_index)
-
-
 file_lvl_gt = '../datasets/preprocessed_data/'
-# file_lvl_gt = '../datasets/preprocessed_data_no_java_keywords/'
-# file_lvl_gt = '../datasets/parsed_dataset_without_comments/'
-# file_lvl_gt = '../datasets/abstract_code_without_comments/'
 
-file_lvl_gt_for_baseline = '../../datasets/parsed_dataset_without_comments/'
-
-# file_lvl_gt_for_baseline = '../../datasets/java-parsed-AST-no-comment-no-varname-no-methodname/'
 
 word2vec_dir = '../output/Word2Vec_model_lowercase/'
 # word2vec_dir = '../output/Word2Vec_model_lowercase_no_java_keywords/'
 # word2vec_dir = '../output/Word2Vec_model_cross_release/'
-# word2vec_deepline_dp_file_dir = os.path.join(word2vec_dir,'DeepLineDP')
-# word2vec_baseline_file_dir = os.path.join(word2vec_dir,'baseline')
-# word2vec_deepline_dp_file_dir = os.path.join(word2vec_dir,'DeepLineDP_abs')
-# word2vec_baseline_file_dir = os.path.join(word2vec_dir,'baseline_abs')
 
-# loss_dir = './loss/'
+# def get_df(rel, include_comment=False, include_blank_line=False, include_test_files = False, is_baseline=False):
+def get_df(rel, is_baseline=False):
+
+    if is_baseline:
+        df = pd.read_csv('../'+file_lvl_gt+rel+".csv")
+
+    else:
+        df = pd.read_csv(file_lvl_gt+rel+".csv")
+
+    df = df.fillna('')
+
+    df = df[df['is_comment']==False]
+    df = df[df['is_blank']==False]
+    df = df[df['is_test_file']==False]
+
+    # if not include_comment:
+    #     df = df[df['is_comment']==False]
+
+    # if not include_blank_line:
+    #     df = df[df['is_blank']==False]
+
+    # if not include_test_files:
+    #     df = df[df['is_test_file']==False]
+
+    return df
 
 def prepare_code2d(code_list, to_lowercase = False):
     '''
@@ -117,40 +93,7 @@ def prepare_code2d(code_list, to_lowercase = False):
         code2d.append(token_list)
 
     return code2d
-
-# def prepare_data(rel):
-#     df = pd.read_csv(file_lvl_gt+rel+'.txt',sep='\t')
-#     df = df.dropna()
     
-#     code = list(df['Code'])
-    
-#     code_3D_list = create3DList(code)
-#     label = list(df['Bug'])
-    
-#     return code_3D_list, label
-
-def get_df(rel, include_comment=False, include_blank_line=False, include_test_files = False, is_baseline=False):
-
-    if is_baseline:
-        df = pd.read_csv('../'+file_lvl_gt+rel+".csv")
-
-    else:
-        df = pd.read_csv(file_lvl_gt+rel+".csv")
-    # print(df.head())
-
-    df = df.fillna('')
-
-    if not include_comment:
-        df = df[df['is_comment']==False]
-
-    if not include_blank_line:
-        df = df[df['is_blank']==False]
-
-    if not include_test_files:
-        df = df[df['is_test_file']==False]
-
-    return df
-
 def get_code3d_and_label(df, to_lowercase = False):
     '''
         input
@@ -164,8 +107,6 @@ def get_code3d_and_label(df, to_lowercase = False):
     all_file_label = []
 
     for filename, group_df in df.groupby('filename'):
-        # print(filename)
-        # print(group_df)
 
         file_label = bool(group_df['file-label'].unique())
 
@@ -175,30 +116,27 @@ def get_code3d_and_label(df, to_lowercase = False):
         code3d.append(code2d)
 
         all_file_label.append(file_label)
-        # print(code)
-
-        # code_str = '\n'.join(code)
-        # print(code_str)
-        # break
 
     return code3d, all_file_label
 
-def get_w2v_path(include_comment=False,include_test_file=False):
-    suffix = ''
+# def get_w2v_path(include_comment=False,include_test_file=False):
+def get_w2v_path():
+    # suffix = ''
 
-    if include_comment:
-        suffix = suffix + 'with-comment-'
-    else:
-        suffix = suffix + 'without-comment-'
+    # if include_comment:
+    #     suffix = suffix + 'with-comment-'
+    # else:
+    #     suffix = suffix + 'without-comment-'
 
-    if include_test_file:
-        suffix = suffix + 'with-test-file'
-    else:
-        suffix = suffix + 'without-test-file'
+    # if include_test_file:
+    #     suffix = suffix + 'with-test-file'
+    # else:
+    #     suffix = suffix + 'without-test-file'
 
-    actual_w2v_dir = word2vec_dir+suffix+'/'
+    # actual_w2v_dir = word2vec_dir+suffix+'/'
 
-    return actual_w2v_dir
+    # return actual_w2v_dir
+    return word2vec_dir
 
 def get_w2v_weight_for_deep_learning_models(word2vec_model, embed_dim):
     word2vec_weights = torch.FloatTensor(word2vec_model.wv.syn0).cuda()
@@ -208,149 +146,38 @@ def get_w2v_weight_for_deep_learning_models(word2vec_model, embed_dim):
 
     return word2vec_weights
 
-# def get_actual_code_without_comment(java_code):
-#     # return list of line numbers, code without comment (in str format)
-#     comment_pattern = '//.*?\n|/\*.*?\*/\n'
-#     code_lines = java_code.splitlines() # problem is here (but why?????)
-#     code_lines_with_line_num = []
-
-#     for i in range(0,len(code_lines)):
-#         tmp_line = str(code_lines[i])
-#         if tmp_line.endswith('*/'):
-#             code_lines_with_line_num.append(tmp_line.replace('*/','')+' <LINE '+ str(i+1) + '>*/')
-#         else:
-#             code_lines_with_line_num.append(tmp_line+' <LINE '+ str(i+1) + '>')
-
-#     code_lines_with_line_num = '\n'.join(code_lines_with_line_num)
-
-#     no_comment_code = re.sub(comment_pattern, '', code_lines_with_line_num, flags=re.S).replace('{',' ').replace('}',' ').replace('(',' ').replace(')',' ')
-
-#     line_num_list = re.findall(r'<LINE \d+>', no_comment_code)
-#     line_num_list = [int(l.replace('<LINE ','').replace('>','')) for l in line_num_list]
-
-#     no_comment_code_lines = no_comment_code.split('\n')
-#     no_comment_code_lines = [s.strip() for s in no_comment_code_lines]
-
-#     while '' in no_comment_code_lines:
-#         no_comment_code_lines.remove('')
-
-#     no_comment_code_lines = '\n'.join(no_comment_code_lines)
-#     no_comment_code_lines = re.sub('<LINE .*>','',no_comment_code_lines)
-
-#     return no_comment_code_lines, line_num_list
-
-# def create3DList(code_list, ignore_blank_line = True):
-#     code_3d = []
+# def pad_code(code_list_3d,max_sent_len,limit_sent_len=True, mode='train'):
+#     paded = []
     
-#     for c in code_list:
-#         raw_code = c.split('\n')
-#         token_list = []
-#         for l in raw_code:    
-#             l_clean = re.sub('\\s+',' ',l)
-#             l_clean = l.strip()
-
-#             if ignore_blank_line:
-#                 if len(l_clean) < 1: # ignore blank lines
-#                     continue
-
-#             tokens = l_clean.split()
-#             token_list.append(tokens)
-#         code_3d.append(token_list)
-    
-#     return code_3d
-
-def pad_code(code_list_3d,max_sent_len,limit_sent_len=True, mode='train'):
-    paded = []
-    
-    for file in code_list_3d:
-        sent_list = []
-        for line in file:
-            new_line = line
-            if len(line) > max_seq_len:
-                new_line = line[:max_seq_len]
-            sent_list.append(new_line)
+#     for file in code_list_3d:
+#         sent_list = []
+#         for line in file:
+#             new_line = line
+#             if len(line) > max_seq_len:
+#                 new_line = line[:max_seq_len]
+#             sent_list.append(new_line)
             
         
-        if mode == 'train':
-            if max_sent_len-len(file) > 0:
-                for i in range(0,max_sent_len-len(file)):
-                    sent_list.append([0]*max_seq_len)
+#         if mode == 'train':
+#             if max_sent_len-len(file) > 0:
+#                 for i in range(0,max_sent_len-len(file)):
+#                     sent_list.append([0]*max_seq_len)
 
-        if limit_sent_len:    
-            paded.append(sent_list[:max_sent_len])
-        else:
-            paded.append(sent_list)
+#         if limit_sent_len:    
+#             paded.append(sent_list[:max_sent_len])
+#         else:
+#             paded.append(sent_list)
         
-    return paded
+#     return paded
 
-# def get_df_for_baseline(release):
-
-#     df = pd.read_csv(file_lvl_gt_for_baseline+release+'.txt',sep='\t')
-#     # else:
-#     #     df = pd.read_csv(file_lvl_gt+release+'.txt',sep='\t')
-#     df = df.dropna()
-# #     df = df.head() # just for testing
-#     # source code that has bug comes first
-#     # sorted_df = df.sort_values('Bug',ascending=False)
-    
-#     return df
-
-# def get_data_and_label(df):
-#     code = list(df['Code'])
-# #     code = [re.sub('\\s+',' ',c.lower()) for c in code] # make all code to lowercase
-
-#     labels = list(df['Bug'])
-#     encoded_labels = np.array([1 if label == True else 0 for label in labels])
-    
-#     return code,encoded_labels # both are list of code and label
-
-def get_dataloader(code_vec, label_list,batch_size, max_sent_len, sampler=None):
+def get_dataloader(code_vec, label_list,batch_size, max_sent_len):
     y_tensor =  torch.cuda.FloatTensor([label for label in label_list])
     code_vec_pad = pad_code(code_vec,max_sent_len)
     tensor_dataset = TensorDataset(torch.tensor(code_vec_pad), y_tensor)
 
-    if sampler is not None:
-        dl = DataLoader(tensor_dataset,batch_size=batch_size,drop_last=True, sampler=sampler)
-    else:
-        dl = DataLoader(tensor_dataset,shuffle=True,batch_size=batch_size,drop_last=True)
+    dl = DataLoader(tensor_dataset,shuffle=True,batch_size=batch_size,drop_last=True)
     
     return dl
-
-# def prepare_data(rel):
-#     df = pd.read_csv(file_lvl_gt+rel+'.txt',sep='\t')
-#     df = df.dropna()
-    
-#     code = list(df['Code'])
-    
-#     code_3D_list = create3DList(code)
-#     label = list(df['Bug'])
-    
-#     return code_3D_list, label
-
-# def prepare_data_cross_release(rel):
-#     df = pd.read_csv(file_lvl_gt+rel+'.txt',sep='\t')
-#     df = df.dropna()
-
-#     total_samples = len(df)
-#     train_samples = round(0.9*total_samples)
-#     # valid_samples = total_samples-train_samples
-    
-#     df_shuffled=shuffle(df, random_state=0)
-
-#     code = list(df['Code'])
-
-#     train_code = code[:train_samples]
-#     valid_code = code[train_samples:]
-    
-#     train_code_3D_list = create3DList(train_code)
-#     valid_code_3D_list = create3DList(valid_code)
-
-#     label = list(df['Bug'])
-
-#     train_label = label[:train_samples]
-#     valid_label = label[train_samples:]
-    
-#     return train_code_3D_list, valid_code_3D_list, train_label, valid_label
 
 def get_x_vec(code_3d, word2vec):
     x_vec = [[[word2vec.wv.vocab[token].index if token in word2vec.wv.vocab else len(word2vec.wv.vocab) for token in text]

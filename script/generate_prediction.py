@@ -1,8 +1,5 @@
-import os, re, argparse, pickle
+import os, argparse, pickle
 
-import torch.optim as optim
-
-import numpy as np
 import pandas as pd
 
 from gensim.models import Word2Vec
@@ -23,11 +20,11 @@ arg.add_argument('-sent_gru_hidden_dim', type=int, default=64, help='sentence at
 arg.add_argument('-word_gru_num_layers', type=int, default=1, help='number of GRU layer at word level')
 arg.add_argument('-sent_gru_num_layers', type=int, default=1, help='number of GRU layer at sentence level')
 arg.add_argument('-exp_name',type=str,default='')
-arg.add_argument('-target_epochs',type=str,default='100')
+arg.add_argument('-target_epochs',type=str,default='6', help='the epoch to load model')
 arg.add_argument('-dropout', type=float, default=0.5, help='dropout rate')
-arg.add_argument('-include_comment',action='store_true')
-arg.add_argument('-include_blank_line',action='store_true')
-arg.add_argument('-include_test_file',action='store_true')
+# arg.add_argument('-include_comment',action='store_true')
+# arg.add_argument('-include_blank_line',action='store_true')
+# arg.add_argument('-include_test_file',action='store_true')
 
 args = arg.parse_args()
 
@@ -51,11 +48,11 @@ dropout = args.dropout
 save_every_epochs = 5
 exp_name = args.exp_name
 
-include_comment = args.include_comment
-include_blank_line = args.include_blank_line
-include_test_file = args.include_test_file
+# include_comment = args.include_comment
+# include_blank_line = args.include_blank_line
+# include_test_file = args.include_test_file
 
-to_lowercase = True
+# to_lowercase = True
 
 # dir_suffix = 'no-abs-rebalancing-adaptive-ratio2-with-comment'
 # dir_suffix = 'rebalancing-adaptive-ratio2'
@@ -64,24 +61,28 @@ to_lowercase = True
 
 # dir_suffix = 'rebalancing-adaptive-ratio2-lowercase-new-lr2'
 # dir_suffix = 'rebalancing-adaptive-ratio2-lowercase'
-dir_suffix = 'no-rebalancing-adaptive-ratio2-lowercase'
+# dir_suffix = 'no-rebalancing-adaptive-ratio2-lowercase'
 
 # dir_suffix = 'train-test-subsequent-release'
 
-if include_comment:
-    dir_suffix = dir_suffix + '-with-comment'
+# if include_comment:
+#     dir_suffix = dir_suffix + '-with-comment'
 
-if include_blank_line:
-    dir_suffix = dir_suffix + '-with-blank-line'
+# if include_blank_line:
+#     dir_suffix = dir_suffix + '-with-blank-line'
 
-if include_test_file:
-    dir_suffix = dir_suffix + '-with-test-file'
+# if include_test_file:
+#     dir_suffix = dir_suffix + '-with-test-file'
 
-dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
+# dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
 
-intermediate_output_dir = '../output/intermediate_output/DeepLineDP/'+dir_suffix+'/'
-save_model_dir = '../output/model/DeepLineDP/'+dir_suffix+'/'
-prediction_dir = '../output/prediction/DeepLineDP/'+dir_suffix+'/'
+# intermediate_output_dir = '../output/intermediate_output/DeepLineDP/'+dir_suffix+'/'
+# save_model_dir = '../output/model/DeepLineDP/'+dir_suffix+'/'
+# prediction_dir = '../output/prediction/DeepLineDP/'+dir_suffix+'/'
+
+intermediate_output_dir = '../output/intermediate_output/DeepLineDP/'
+save_model_dir = '../output/model/DeepLineDP/'
+prediction_dir = '../output/prediction/DeepLineDP/'
 
 file_lvl_gt = '../datasets/preprocessed_data/'
 
@@ -91,25 +92,13 @@ if not os.path.exists(prediction_dir):
 
 def predict_defective_files_in_releases(dataset_name, target_epochs):
 
-    
     actual_save_model_dir = save_model_dir+dataset_name+'/'
 
     train_rel = all_train_releases[dataset_name]
     test_rel = all_eval_releases[dataset_name][1:]
-    # test_rel = [all_eval_releases[dataset_name][0]] # will remove later...
-    # test_rel = all_eval_releases[dataset_name] # include validation set
 
-    # train_df = get_df(train_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
-
-    # _, train_label = get_code3d_and_label(train_df)
-
-    # all_n = len(train_label)
-    # n_pos = np.sum(train_label)
-    # n_neg = all_n - n_pos
-
-    # beta = n_neg/n_pos
-
-    w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
+    # w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
+    w2v_dir = get_w2v_path()
 
     word2vec_file_dir = os.path.join(w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
 
@@ -125,7 +114,6 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
     
         
     model = HierarchicalAttentionNetwork(
-        num_classes=1,
         vocab_size=vocab_size,
         embed_dim=embed_dim,
         word_gru_hidden_dim=word_gru_hidden_dim,
@@ -156,9 +144,10 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
         actual_intermediate_output_dir = intermediate_output_dir+rel+'/'
 
         if not os.path.exists(actual_intermediate_output_dir):
-                os.makedirs(actual_intermediate_output_dir)
+            os.makedirs(actual_intermediate_output_dir)
 
-        test_df = get_df(rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
+        # test_df = get_df(rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
+        test_df = get_df(rel)
     
         row_list = [] # for creating dataframe later...
 
@@ -171,24 +160,24 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
 
             code = df['code_line'].tolist()
 
-            code2d = prepare_code2d(code, to_lowercase)
+            code2d = prepare_code2d(code, True)
 
             code3d = [code2d]
 
             codevec = get_x_vec(code3d, word2vec)
-            codevec_padded = pad_code(codevec,max_sent_len,limit_sent_len=False, mode='test') 
+            # codevec_padded = pad_code(codevec,max_sent_len,limit_sent_len=False, mode='test') 
 
             save_file_path = actual_intermediate_output_dir+filename.replace('/','_').replace('.java','')+'_'+target_epochs+'_epochs.pkl'
             
             if not os.path.exists(save_file_path):
                 with torch.no_grad():
-                    codevec_padded_tensor = torch.tensor(codevec_padded)
+                    codevec_padded_tensor = torch.tensor(codevec)
                     output, word_att_weights, line_att_weight = model(codevec_padded_tensor)
                     file_prob = output.item()
                     prediction = bool(round(output.item()))
 
                     torch.cuda.empty_cache()
-                    
+
                     output_dict = {
                         'filename': filename,
                         'file-label': file_label,
@@ -214,17 +203,7 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
             numpy_word_attn = word_att_weights[0].cpu().detach().numpy()
             numpy_line_attn = line_att_weight[0].cpu().detach().numpy()
 
-            # loop through each row (based on code)
-            # for each row, split list then loop through the list
-            # then use the index to get attention from word_att_weights
-            # then store in list (somehow...) 
-
-            # Line-level CSV: project, train, test, filename, file-level ground-truth, deeplinedp_prob, line-number, line-level ground-truth, token, attention score
-
-            # print(numpy_word_attn.shape, len(code), len(code2d), len(codevec[0]), len(codevec_padded[0]), codevec_padded_tensor.shape)
-
-            # total_line = min(len(code), numpy_word_attn.shape[0]) 
-
+            # for each line in source code
             for i in range(0,len(code)):
                 cur_line = code[i]
                 cur_line_label = line_label[i]
@@ -234,13 +213,14 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
 
                 token_list = cur_line.strip().split()
 
-                # print(cur_line)
-
                 max_len = min(len(token_list),50) # limit max token each line
 
+                # for each token in a line
                 for j in range(0,max_len):  
                     tok = token_list[j]
                     word_attn = numpy_word_attn[i][j]
+
+                    # Line-level CSV: project, train, test, filename, file-level ground-truth, deeplinedp_prob, line-number, line-level ground-truth, token, attention score
 
                     row_dict = {
                         'project': dataset_name, 
@@ -260,24 +240,11 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
 
                     row_list.append(row_dict)
 
-                # break
-
-            # break
-
         df = pd.DataFrame(row_list)
 
         df.to_csv(prediction_dir+rel+'-'+target_epochs+'-epochs.csv', index=False)
 
         print('finished release', rel)
-        # break
-
-
-        # if exp_name == '':
-        #     prediction_df.to_csv(prediction_dir+rel+'_'+target_epochs+'_epochs.csv',index=False)
-        # else:
-        #     prediction_df.to_csv(prediction_dir+rel+'_'+exp_name+'_'+target_epochs+'_epochs.csv',index=False)
-
-        # print('finished predicting defective files in',rel)
 
 dataset_name = args.dataset
 target_epochs = args.target_epochs

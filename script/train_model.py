@@ -1,7 +1,6 @@
 import os, re, argparse
 
 import torch.optim as optim
-from torch.utils.data import WeightedRandomSampler
 
 import numpy as np
 import pandas as pd
@@ -32,9 +31,9 @@ arg.add_argument('-lr', type=float, default=0.001, help='learning rate')
 arg.add_argument('-exp_name',type=str,default='')
 # arg.add_argument('-dir_suffix',type=str,default='rebalancing-adaptive-ratio2-new-lr2')
 
-arg.add_argument('-include_comment',action='store_true')
-arg.add_argument('-include_blank_line',action='store_true')
-arg.add_argument('-include_test_file',action='store_true')
+# arg.add_argument('-include_comment',action='store_true')
+# arg.add_argument('-include_blank_line',action='store_true')
+# arg.add_argument('-include_test_file',action='store_true')
 
 args = arg.parse_args()
 
@@ -58,37 +57,42 @@ exp_name = args.exp_name
 
 max_train_LOC = 900
 
-include_comment = args.include_comment
-include_blank_line = args.include_blank_line
-include_test_file = args.include_test_file
+# include_comment = args.include_comment
+# include_blank_line = args.include_blank_line
+# include_test_file = args.include_test_file
 
-to_lowercase = True
+# to_lowercase = True
 
-# dir_suffix = 'no-abs-rebalancing-adaptive-ratio2-with-comment'
-# dir_suffix = 'rebalancing-adaptive-ratio2-new-lr2'
-# dir_suffix = 'rebalancing-adaptive-ratio2'
+# dir_suffix = 'no-rebalancing-adaptive-ratio2-lowercase'
 
-dir_suffix = 'no-rebalancing-adaptive-ratio2-lowercase'
+# if include_comment:
+#     dir_suffix = dir_suffix + '-with-comment'
 
-if include_comment:
-    dir_suffix = dir_suffix + '-with-comment'
+# if include_blank_line:
+#     dir_suffix = dir_suffix + '-with-blank-line'
 
-if include_blank_line:
-    dir_suffix = dir_suffix + '-with-blank-line'
+# if include_test_file:
+#     dir_suffix = dir_suffix + '-with-test-file'
 
-if include_test_file:
-    dir_suffix = dir_suffix + '-with-test-file'
+# dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
 
-dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
+# prediction_dir = '../output/prediction/DeepLineDP/'+dir_suffix+'/'
+# save_model_dir = '../output/model/DeepLineDP/'+dir_suffix+'/'
 
-prediction_dir = '../output/prediction/DeepLineDP/'+dir_suffix+'/'
-save_model_dir = '../output/model/DeepLineDP/'+dir_suffix+'/'
+prediction_dir = '../output/prediction/DeepLineDP/'
+save_model_dir = '../output/model/DeepLineDP/'
 
 file_lvl_gt = '../datasets/preprocessed_data/'
 
 weight_dict = {}
 
 def get_loss_weight(labels):
+    '''
+        input
+            labels: a PyTorch tensor that contains labels
+        output
+            weight_tensor: a PyTorch tensor that contains weight of defect/clean class
+    '''
     label_list = labels.cpu().numpy().squeeze().tolist()
     weight_list = []
 
@@ -103,8 +107,8 @@ def get_loss_weight(labels):
 
 def train_model(dataset_name):
 
-    # dataset_name = 'activemq'
-    loss_dir = '../output/loss/'+dir_suffix+'/'
+    # loss_dir = '../output/loss/'+dir_suffix+'/'
+    loss_dir = '../output/loss/'
     actual_save_model_dir = save_model_dir+dataset_name+'/'
 
     if not exp_name == '':
@@ -117,23 +121,26 @@ def train_model(dataset_name):
     if not os.path.exists(loss_dir):
         os.makedirs(loss_dir)
 
-    w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
-
+    # w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
+    
     train_rel = all_train_releases[dataset_name]
     valid_rel = all_eval_releases[dataset_name][0]
 
-    train_df = get_df(train_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
+    # train_df = get_df(train_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
+    train_df = get_df(train_rel)
     
-    valid_df = get_df(valid_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
+    # valid_df = get_df(valid_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
+    valid_df = get_df(valid_rel)
 
-    train_code3d, train_label = get_code3d_and_label(train_df, to_lowercase)
-    valid_code3d, valid_label = get_code3d_and_label(valid_df, to_lowercase)
+    train_code3d, train_label = get_code3d_and_label(train_df, True)
+    valid_code3d, valid_label = get_code3d_and_label(valid_df, True)
 
-    # sample_weights = compute_class_weight(class_weight = 'balanced', classes = np.unique(train_label), y = train_label)
+    sample_weights = compute_class_weight(class_weight = 'balanced', classes = np.unique(train_label), y = train_label)
 
-    # weight_dict['defect'] = np.max(sample_weights)
-    # weight_dict['clean'] = np.min(sample_weights)
+    weight_dict['defect'] = np.max(sample_weights)
+    weight_dict['clean'] = np.min(sample_weights)
     
+    w2v_dir = get_w2v_path()
 
     word2vec_file_dir = os.path.join(w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
 
@@ -153,21 +160,7 @@ def train_model(dataset_name):
 
     valid_dl = get_dataloader(x_valid_vec, valid_label,batch_size,max_sent_len)
 
-    # ## just for testing
-    # for inputs, labels in train_dl:
-    #     print(len(labels),torch.sum(labels))
-    #     break
-
-    # old_train_dl = get_dataloader(x_train_vec,train_label,batch_size,max_sent_len)
-
-    # for inputs, labels in old_train_dl:
-    #     print(len(labels),torch.sum(labels))
-    #     break
-
-    # ####################
-
     model = HierarchicalAttentionNetwork(
-        num_classes=1,
         vocab_size=vocab_size,
         embed_dim=embed_dim,
         word_gru_hidden_dim=word_gru_hidden_dim,
@@ -205,9 +198,6 @@ def train_model(dataset_name):
         checkpoint_nums = [int(re.findall('\d+',s)[0]) for s in checkpoint_files]
         current_checkpoint_num = max(checkpoint_nums)
 
-        print(current_checkpoint_num)
-        print(actual_save_model_dir)
-
         checkpoint = torch.load(actual_save_model_dir+'checkpoint_'+str(current_checkpoint_num)+'epochs.pth')
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -217,9 +207,7 @@ def train_model(dataset_name):
         val_loss_all_epochs = list(loss_df['valid_loss'])
 
         current_checkpoint_num = current_checkpoint_num+1 # go to next epoch
-        print('train model from epoch',current_checkpoint_num)
-
-    # for each epoch
+        print('continue training model from epoch',current_checkpoint_num)
 
     for epoch in tqdm(range(current_checkpoint_num,num_epochs+1)):
         train_losses = []
@@ -232,9 +220,9 @@ def train_model(dataset_name):
             inputs_cuda, labels_cuda = inputs.cuda(), labels.cuda()
             output, _, __ = model(inputs_cuda)
 
-            # weight_tensor = get_loss_weight(labels)
+            weight_tensor = get_loss_weight(labels)
 
-            # criterion.weight = weight_tensor
+            criterion.weight = weight_tensor
 
             loss = criterion(output, labels_cuda.reshape(batch_size,1))
 
@@ -252,7 +240,8 @@ def train_model(dataset_name):
         train_loss_all_epochs.append(np.mean(train_losses))
 
         with torch.no_grad():
-            # criterion.weight = None
+            
+            criterion.weight = None
             model.eval()
             
             for inputs, labels in valid_dl:
