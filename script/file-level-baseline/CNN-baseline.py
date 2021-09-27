@@ -11,6 +11,8 @@ from gensim.models import Word2Vec
 
 from tqdm import tqdm
 
+from baseline_util import *
+
 sys.path.append('../')
 
 from my_util import *
@@ -45,24 +47,24 @@ exp_name = args.exp_name
 save_every_epochs = 2 # default is 5
 
 
-include_comment = True
-include_blank_line = False
-include_test_file = False
+# include_comment = True
+# include_blank_line = False
+# include_test_file = False
 
-to_lowercase = True
+# to_lowercase = True
 
-dir_suffix = 'lowercase'
+# dir_suffix = 'lowercase'
 
-if include_comment:
-    dir_suffix = dir_suffix + '-with-comment'
+# if include_comment:
+#     dir_suffix = dir_suffix + '-with-comment'
 
-if include_blank_line:
-    dir_suffix = dir_suffix + '-with-blank-line'
+# if include_blank_line:
+#     dir_suffix = dir_suffix + '-with-blank-line'
 
-if include_test_file:
-    dir_suffix = dir_suffix + '-with-test-file'
+# if include_test_file:
+#     dir_suffix = dir_suffix + '-with-test-file'
 
-dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
+# dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
 
 
 save_model_dir = '../../output/model/CNN/'
@@ -81,7 +83,6 @@ class CNN(nn.Module):
         output_size : 1
         in_channels : Number of input channels. Here it is 1 as the input data has dimension = (batch_size, num_seq, embedding_length)
         out_channels : Number of output channels after convolution operation performed on the input matrix
-        kernel_heights : A list consisting of 2 different kernel_heights. Convolution will be performed 2 times and finally results from each kernel_height will be concatenated.
         keep_probab : Probability of retaining an activation node during dropout operation
         vocab_size : Size of the vocabulary containing unique words
         '''
@@ -89,24 +90,13 @@ class CNN(nn.Module):
         self.output_size = output_size
         self.in_channels = in_channels
         self.out_channels = out_channels
-        # self.kernel_heights = kernel_heights
         self.vocab_size = vocab_size
         self.embedding_length = embedding_dim
 
         self.word_embeddings = nn.Embedding(vocab_size, embedding_dim)
 
-        window_sizes=(3, 4, 5)
+        self.conv = nn.Conv2d(1, 100, (5, embedding_dim))
 
-        # num_filters = 100 (like in paper "Convolutional Neural Network for Sentence Classification")
-
-        # self.convs = nn.ModuleList([
-        #     nn.Conv2d(1, 100, [window_size, embedding_dim], padding=(window_size - 1, 0))
-        #     for window_size in window_sizes
-        # ])
-
-        self.conv1 = nn.Conv2d(1, 100, (5, embedding_dim), padding=(5 - 1, 0))
-        # self.conv2 = nn.Conv2d(in_channels, out_channels, (kernel_heights[1], embedding_dim))
-        # self.conv3 = nn.Conv2d(in_channels, out_channels, (kernel_heights[2], embedding_dim))
 
         self.dropout = nn.Dropout(keep_probab)
         # self.fc = nn.Linear(len(kernel_heights)*out_channels, output_size)
@@ -117,9 +107,6 @@ class CNN(nn.Module):
         self.sig = nn.Sigmoid()
 
     def conv_block(self, input, conv_layer):
-        # x2 = F.relu(conv(x))        # [B, F, T, 1]
-        #     x2 = torch.squeeze(x2, -1)  # [B, F, T]
-        #     x2 = F.max_pool1d(x2, x2.size(2))  # [B, F, 1]
 
         conv_out = F.relu(conv_layer(input))
         conv_out = torch.squeeze(conv_out,-1)
@@ -150,31 +137,10 @@ class CNN(nn.Module):
         input = input.unsqueeze(1)
         # input.size() = (batch_size, 1, num_seq, embedding_length)
 
-        # xs = []
+        max_out = self.conv_block(input, self.conv)
+        max_out = max_out.view(max_out.size(0),-1)
 
-        # for conv in self.convs:
-        #     max_out = self.conv_block(input, conv)
-        #     xs.append(max_out)
-
-        #     # x2 = F.relu(conv(x))        # [B, F, T, 1]
-        #     # x2 = torch.squeeze(x2, -1)  # [B, F, T]
-        #     # x2 = F.max_pool1d(x2, x2.size(2))  # [B, F, 1]
-        #     # xs.append(x2)
-
-        # # x = torch.cat(xs, 2)            # [B, F, window]
-        # all_out = torch.cat(xs, 2)
-        # all_out = all_out.view(all_out.size(0), -1) 
-
-        max_out1 = self.conv_block(input, self.conv1)
-        max_out1 = max_out1.view(max_out1.size(0),-1)
-        # max_out2 = self.conv_block(input, self.conv2)
-        # max_out3 = self.conv_block(input, self.conv3)
-
-        # all_out = torch.cat((max_out1, max_out2), 1)
-        # all_out = torch.cat((max_out1, max_out2, max_out3), 1)
-        # all_out.size() = (batch_size, num_kernels*out_channels)
-        # fc_in = self.dropout(all_out)
-        fc_in = self.dropout(max_out1)
+        fc_in = self.dropout(max_out)
         # fc_in.size()) = (batch_size, num_kernels*out_channels)
         # print('fc_in size:',fc_in.shape)
         logits = self.fc(fc_in)
@@ -219,106 +185,9 @@ class CNN(nn.Module):
 
 #     return dl
 
-def pad_features(codevec, padding_idx, seq_length):
-    ''' Return features of review_ints, where each review is padded with 0's 
-        or truncated to the input seq_length.
-    '''
-    ## getting the correct rows x cols shape
-    features = np.zeros((len(codevec), seq_length), dtype=int)
-    
-    ## for each review, I grab that review
-    for i, row in enumerate(codevec):
-        if len(row) > seq_length:
-            features[i,:] = row[:seq_length]
-        else:
-            features[i, :] = row + [padding_idx]* (seq_length - len(row))
-    
-    return features
-
-def get_code_str(code, to_lowercase):
-    '''
-        input
-            code (list): a list of code lines from dataset
-            to_lowercase (bool)
-        output
-            code_str: a code in string format
-    '''
-
-    code_str = '\n'.join(code)
-
-    if to_lowercase:
-        code_str = code_str.lower()
-
-    return code_str
-
-def get_code_vec(code, w2v_model):
-    '''
-        input
-            code (list): a list of code string (from prepare_data_for_LSTM())
-            w2v_model (Word2Vec)
-        output
-            codevec (list): a list of token index of each file
-    '''
-    codevec = []
-
-    for c in code:
-        codevec.append([w2v_model.wv.vocab[word].index if word in w2v_model.wv.vocab else len(w2v_model.wv.vocab) for word in c.split()])
-
-    return codevec
-
-def get_dataloader_for_LSTM(w2v_model, code,encoded_labels, padding_idx):
-    '''
-        input
-            w2v_model (Word2Vec)
-            code (list of string)
-            encoded_labels (list)
-        output
-
-    '''
-    codevec = get_code_vec(code, w2v_model)
-
-    # to prevent out of memory error
-    max_seq_len = min(max([len(cv) for cv in codevec]),45000)
-        
-    features = pad_features(codevec, padding_idx, seq_length=max_seq_len)
-    tensor_data = TensorDataset(torch.from_numpy(features), torch.from_numpy(np.array(encoded_labels).astype(int)))
-    dl = DataLoader(tensor_data, shuffle=True, batch_size=batch_size,drop_last=True)
-
-    return dl
-
-def prepare_data_for_LSTM(df, to_lowercase = False):
-    '''
-        input
-            df (DataFrame): input data from get_df() function
-        output
-            all_code_str (list): a list of source code in string format
-            all_file_label (list): a list of label
-    '''
-    all_code_str = []
-    all_file_label = []
-
-    for filename, group_df in df.groupby('filename'):
-        # print(filename)
-        # print(group_df)
-
-        file_label = bool(group_df['file-label'].unique())
-
-        code = list(group_df['code_line'])
-
-        code_str = get_code_str(code, to_lowercase)
-
-        # if to_lowercase:
-        #     code_str = code_str.lower()
-
-        all_code_str.append(code_str)
-
-        all_file_label.append(file_label)
-
-    return all_code_str, all_file_label
-
 def train_model(dataset_name):
 
-    loss_dir = '../../output/loss/CNN/'+dir_suffix+'/'
+    loss_dir = '../../output/loss/CNN/'
     actual_save_model_dir = save_model_dir+dataset_name+'/'
 
     if not exp_name == '':
@@ -331,19 +200,16 @@ def train_model(dataset_name):
     if not os.path.exists(loss_dir):
         os.makedirs(loss_dir)
 
-    w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
+    w2v_dir = get_w2v_path()
     # w2v_dir = '../'+w2v_dir
     w2v_dir = os.path.join('../'+w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
 
     train_rel = all_train_releases[dataset_name]
     valid_rel = all_eval_releases[dataset_name][0]
 
-    train_df = get_df(train_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line,is_baseline=True)
+    train_df = get_df(train_rel,is_baseline=True)
     
-    valid_df = get_df(valid_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line,is_baseline=True)
-
-    # train_code3d, train_label = get_code3d_and_label(train_df, to_lowercase)
-    # valid_code3d, valid_label = get_code3d_and_label(valid_df, to_lowercase)
+    valid_df = get_df(valid_rel,is_baseline=True)
 
     word2vec_model = Word2Vec.load(w2v_dir)
     
@@ -359,8 +225,8 @@ def train_model(dataset_name):
 
     # valid_dl = get_dataloader(x_valid_vec, valid_label,batch_size,max_sent_len)
 
-    train_code, train_label = prepare_data_for_LSTM(train_df, to_lowercase = to_lowercase)
-    valid_code, valid_label = prepare_data_for_LSTM(valid_df, to_lowercase = to_lowercase)
+    train_code, train_label = prepare_data(train_df, to_lowercase = True)
+    valid_code, valid_label = prepare_data(valid_df, to_lowercase = True)
 
     word2vec_model = Word2Vec.load(w2v_dir)
 
@@ -368,8 +234,8 @@ def train_model(dataset_name):
 
     vocab_size = len(word2vec_model.wv.vocab)+1
         
-    train_dl = get_dataloader_for_LSTM(word2vec_model, train_code,train_label, padding_idx)
-    valid_dl = get_dataloader_for_LSTM(word2vec_model, valid_code,valid_label, padding_idx)
+    train_dl = get_dataloader(word2vec_model, train_code,train_label, padding_idx)
+    valid_dl = get_dataloader(word2vec_model, valid_code,valid_label, padding_idx)
 
     net = CNN(batch_size, 1, 1, n_filters, 0.5, vocab_size, embed_dim)
 
@@ -387,8 +253,6 @@ def train_model(dataset_name):
 
     # no model is trained 
     if total_checkpoints == 0:
-        # word2vec_weights = get_w2v_weight_for_deep_learning_models(word2vec_model, embed_dim)
-        # net.word_embeddings.weight = nn.Parameter(word2vec_weights, requires_grad=False)
 
         current_checkpoint_num = 1
 
@@ -441,7 +305,6 @@ def train_model(dataset_name):
             nn.utils.clip_grad_norm_(net.parameters(), clip)
             optimizer.step()
             
-            # break
 
         train_loss_all_epochs.append(np.mean(train_losses))
 
@@ -468,7 +331,6 @@ def train_model(dataset_name):
                         }, 
                         actual_save_model_dir+'checkpoint_'+str(e)+'epochs.pth')
     
-        # break
 
         loss_df = pd.DataFrame()
         loss_df['epoch'] = np.arange(1,len(train_loss_all_epochs)+1)
@@ -484,7 +346,7 @@ def train_model(dataset_name):
 def predict_defective_files_in_releases(dataset_name, target_epochs = 100):
     actual_save_model_dir = save_model_dir+dataset_name+'/'
 
-    w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
+    w2v_dir = get_w2v_path()
         # w2v_dir = '../'+w2v_dir
     w2v_dir = os.path.join('../'+w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
 
@@ -508,7 +370,7 @@ def predict_defective_files_in_releases(dataset_name, target_epochs = 100):
     for rel in eval_rels:
         row_list = []
 
-        test_df = get_df(rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line, is_baseline=True)
+        test_df = get_df(rel, is_baseline=True)
 
         for filename, df in tqdm(test_df.groupby('filename')):
 
@@ -516,7 +378,7 @@ def predict_defective_files_in_releases(dataset_name, target_epochs = 100):
 
             code = list(df['code_line'])
 
-            code_str = get_code_str(code, to_lowercase)
+            code_str = get_code_str(code, True)
             code_list = [code_str]
 
             code_vec = get_code_vec(code_list, word2vec_model)

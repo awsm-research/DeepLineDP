@@ -12,6 +12,8 @@ from gensim.models import Word2Vec
 
 from tqdm import tqdm
 
+from baseline_util import *
+
 # for importing file from previous directory
 sys.path.append('../')
 
@@ -44,24 +46,24 @@ save_every_epochs = 1 # default is 5
 
 max_seq_len = 50
 
-include_comment = True
-include_blank_line = False
-include_test_file = False
+# include_comment = True
+# include_blank_line = False
+# include_test_file = False
 
-to_lowercase = True
+# to_lowercase = True
 
-dir_suffix = 'lowercase'
+# dir_suffix = 'lowercase'
 
-if include_comment:
-    dir_suffix = dir_suffix + '-with-comment'
+# if include_comment:
+#     dir_suffix = dir_suffix + '-with-comment'
 
-if include_blank_line:
-    dir_suffix = dir_suffix + '-with-blank-line'
+# if include_blank_line:
+#     dir_suffix = dir_suffix + '-with-blank-line'
 
-if include_test_file:
-    dir_suffix = dir_suffix + '-with-test-file'
+# if include_test_file:
+#     dir_suffix = dir_suffix + '-with-test-file'
 
-dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
+# dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
 
 
 save_model_dir = '../../output/model/Bi-LSTM/'
@@ -137,106 +139,18 @@ class LSTMClassifier(nn.Module):
         
         return sig_out
 
-def pad_features(codevec, padding_idx, seq_length):
-    ''' Return features of review_ints, where each review is padded with 0's 
-        or truncated to the input seq_length.
-    '''
-    ## getting the correct rows x cols shape
-    features = np.zeros((len(codevec), seq_length), dtype=int)
-    
-    ## for each review, I grab that review
-    for i, row in enumerate(codevec):
-        if len(row) > seq_length:
-            features[i,:] = row[:seq_length]
-        else:
-            features[i, :] = row + [padding_idx]* (seq_length - len(row))
-    
-    return features
 
-def get_code_vec(code, w2v_model):
-    '''
-        input
-            code (list): a list of code string (from prepare_data_for_LSTM())
-            w2v_model (Word2Vec)
-        output
-            codevec (list): a list of token index of each file
-    '''
-    codevec = []
 
-    for c in code:
-        codevec.append([w2v_model.wv.vocab[word].index if word in w2v_model.wv.vocab else len(w2v_model.wv.vocab) for word in c.split()])
 
-    return codevec
 
-def get_dataloader_for_LSTM(w2v_model, code,encoded_labels, padding_idx):
-    '''
-        input
-            w2v_model (Word2Vec)
-            code (list of string)
-            encoded_labels (list)
-        output
 
-    '''
-    codevec = get_code_vec(code, w2v_model)
 
-    # for c in code:
-    #     codevec.append([w2v_model.wv.vocab[word].index if word in w2v_model.wv.vocab else len(w2v_model.wv.vocab) for word in c.split()])
 
-    # to prevent out of memory error
-    max_seq_len = min(max([len(cv) for cv in codevec]),45000)
-        
-    features = pad_features(codevec, padding_idx, seq_length=max_seq_len)
-    tensor_data = TensorDataset(torch.from_numpy(features), torch.from_numpy(np.array(encoded_labels).astype(int)))
-    dl = DataLoader(tensor_data, shuffle=True, batch_size=batch_size,drop_last=True)
-
-    return dl
-
-def get_code_str(code, to_lowercase):
-    '''
-        input
-            code (list): a list of code lines from dataset
-            to_lowercase (bool)
-        output
-            code_str: a code in string format
-    '''
-
-    code_str = '\n'.join(code)
-
-    if to_lowercase:
-        code_str = code_str.lower()
-
-    return code_str
-
-def prepare_data_for_LSTM(df, to_lowercase = False):
-    '''
-        input
-            df (DataFrame): input data from get_df() function
-        output
-            all_code_str (list): a list of source code in string format
-            all_file_label (list): a list of label
-    '''
-    all_code_str = []
-    all_file_label = []
-
-    for filename, group_df in df.groupby('filename'):
-        # print(filename)
-        # print(group_df)
-
-        file_label = bool(group_df['file-label'].unique())
-
-        code = list(group_df['code_line'])
-
-        code_str = get_code_str(code,to_lowercase)
-
-        all_code_str.append(code_str)
-
-        all_file_label.append(file_label)
-
-    return all_code_str, all_file_label
 
 def train_model(dataset_name):
 
-    loss_dir = '../../output/loss/Bi-LSTM/'+dir_suffix+'/'
+    # loss_dir = '../../output/loss/Bi-LSTM/'+dir_suffix+'/'
+    loss_dir = '../../output/loss/Bi-LSTM/'
     actual_save_model_dir = save_model_dir+dataset_name+'/'
 
     if not exp_name == '':
@@ -249,19 +163,18 @@ def train_model(dataset_name):
     if not os.path.exists(loss_dir):
         os.makedirs(loss_dir)
 
-    w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
-    # w2v_dir = '../'+w2v_dir
+    w2v_dir = get_w2v_path()
     w2v_dir = os.path.join('../'+w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
 
     train_rel = all_train_releases[dataset_name]
     valid_rel = all_eval_releases[dataset_name][0]
 
-    train_df = get_df(train_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line, is_baseline=True)
+    train_df = get_df(train_rel, is_baseline=True)
     
-    valid_df = get_df(valid_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line, is_baseline=True)
+    valid_df = get_df(valid_rel, is_baseline=True)
 
-    train_code, train_label = prepare_data_for_LSTM(train_df, to_lowercase = to_lowercase)
-    valid_code, valid_label = prepare_data_for_LSTM(valid_df, to_lowercase = to_lowercase)
+    train_code, train_label = prepare_data(train_df, to_lowercase = True)
+    valid_code, valid_label = prepare_data(valid_df, to_lowercase = True)
 
     word2vec_model = Word2Vec.load(w2v_dir)
 
@@ -269,8 +182,8 @@ def train_model(dataset_name):
 
     vocab_size = len(word2vec_model.wv.vocab)+1
         
-    train_dl = get_dataloader_for_LSTM(word2vec_model, train_code,train_label, padding_idx)
-    valid_dl = get_dataloader_for_LSTM(word2vec_model, valid_code,valid_label, padding_idx)
+    train_dl = get_dataloader(word2vec_model, train_code,train_label, padding_idx, batch_size)
+    valid_dl = get_dataloader(word2vec_model, valid_code,valid_label, padding_idx, batch_size)
 
     net = LSTMClassifier(batch_size, output_size, hidden_dim, vocab_size, embed_dim)
 
@@ -288,8 +201,6 @@ def train_model(dataset_name):
 
     # no model is trained 
     if total_checkpoints == 0:
-        # word2vec_weights = get_w2v_weight_for_deep_learning_models(word2vec_model, embed_dim)
-        # net.word_embeddings.weight = nn.Parameter(word2vec_weights, requires_grad=False)
 
         current_checkpoint_num = 1
 
@@ -317,8 +228,6 @@ def train_model(dataset_name):
     print('training model of',dataset_name)
 
     for e in tqdm(range(current_checkpoint_num,epochs+1)):
-    # for e in tqdm(range(3)): # for testing (will remove later...)
-        # batch loop
 
         train_losses = []
         val_losses = []
@@ -368,8 +277,6 @@ def train_model(dataset_name):
                         }, 
                         actual_save_model_dir+'checkpoint_'+str(e)+'epochs.pth')
 
-        # break
-
         loss_df = pd.DataFrame()
         loss_df['epoch'] = np.arange(1,len(train_loss_all_epochs)+1)
         loss_df['train_loss'] = train_loss_all_epochs
@@ -381,10 +288,10 @@ def train_model(dataset_name):
 
     
 # epoch (int): which epoch to load model
-def predict_defective_files_in_releases(dataset_name, target_epochs = 100):
+def predict_defective_files_in_releases(dataset_name, target_epochs = 6):
     actual_save_model_dir = save_model_dir+dataset_name+'/'
 
-    w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
+    w2v_dir = get_w2v_path()
         # w2v_dir = '../'+w2v_dir
     w2v_dir = os.path.join('../'+w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
 
@@ -409,7 +316,7 @@ def predict_defective_files_in_releases(dataset_name, target_epochs = 100):
     for rel in eval_rels:
         row_list = []
 
-        test_df = get_df(rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line, is_baseline=True)
+        test_df = get_df(rel, is_baseline=True)
 
         for filename, df in tqdm(test_df.groupby('filename')):
 
@@ -417,7 +324,7 @@ def predict_defective_files_in_releases(dataset_name, target_epochs = 100):
 
             code = list(df['code_line'])
 
-            code_str = get_code_str(code, to_lowercase)
+            code_str = get_code_str(code, True)
             code_list = [code_str]
 
             code_vec = get_code_vec(code_list, word2vec_model)

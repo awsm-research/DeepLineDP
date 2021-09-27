@@ -4,8 +4,9 @@ import numpy as np
 import pandas as pd
 
 from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
+
+from baseline_util import *
 
 sys.path.append('../')
 
@@ -23,22 +24,22 @@ arg.add_argument('-predict',action='store_true')
 args = arg.parse_args()
 
 
-include_comment = True
-include_blank_line = False
-include_test_file = False
+# include_comment = True
+# include_blank_line = False
+# include_test_file = False
 
-to_lowercase = True
+# to_lowercase = True
 
-dir_suffix = 'lowercase'
+# dir_suffix = 'lowercase'
 
-if include_comment:
-    dir_suffix = dir_suffix + '-with-comment'
+# if include_comment:
+#     dir_suffix = dir_suffix + '-with-comment'
 
-if include_blank_line:
-    dir_suffix = dir_suffix + '-with-blank-line'
+# if include_blank_line:
+#     dir_suffix = dir_suffix + '-with-blank-line'
 
-if include_test_file:
-    dir_suffix = dir_suffix + '-with-test-file'
+# if include_test_file:
+#     dir_suffix = dir_suffix + '-with-test-file'
 
 save_model_dir = '../../output/model/LR/'
 save_prediction_dir = '../../output/prediction/LR/'
@@ -49,70 +50,22 @@ if not os.path.exists(save_model_dir):
 if not os.path.exists(save_prediction_dir):
     os.makedirs(save_prediction_dir)
 
-def get_code_str(code, to_lowercase):
-    '''
-        input
-            code (list): a list of code lines from dataset
-            to_lowercase (bool)
-        output
-            code_str: a code in string format
-    '''
-
-    code_str = '\n'.join(code)
-
-    if to_lowercase:
-        code_str = code_str.lower()
-
-    return code_str
-
-def prepare_data_for_LSTM(df, to_lowercase = False):
-    '''
-        input
-            df (DataFrame): input data from get_df() function
-        output
-            all_code_str (list): a list of source code in string format
-            all_file_label (list): a list of label
-    '''
-    all_code_str = []
-    all_file_label = []
-
-    for filename, group_df in df.groupby('filename'):
-        # print(filename)
-        # print(group_df)
-
-        file_label = bool(group_df['file-label'].unique())
-
-        code = list(group_df['code_line'])
-
-        code_str = get_code_str(code, to_lowercase)
-
-        # if to_lowercase:
-        #     code_str = code_str.lower()
-
-        all_code_str.append(code_str)
-
-        all_file_label.append(file_label)
-
-    return all_code_str, all_file_label
 
 # train_release is str
 def train_model(dataset_name):
     train_rel = all_train_releases[dataset_name]
-    train_df = get_df(train_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line,is_baseline=True)
+    train_df = get_df(train_rel, is_baseline=True)
 
-    train_code, train_label = prepare_data_for_LSTM(train_df, to_lowercase)
+    train_code, train_label = prepare_data(train_df, True)
 
     vectorizer = CountVectorizer() 
     vectorizer.fit(train_code)
     X = vectorizer.transform(train_code).toarray() 
-    # Y = list(train_label)
     Y = np.array([1 if label == True else 0 for label in train_label])
-    # Y = train_label
 
     # train_feature = pd.DataFrame(X)
     # train_feature.columns = vectorizer.get_feature_names()
     
-    # clf = RandomForestClassifier(random_state = 42, n_jobs=-1)
     clf = LogisticRegression(solver='liblinear')
 
     clf.fit(X, Y)
@@ -126,9 +79,8 @@ def train_model(dataset_name):
     count_vec_df = pd.DataFrame(X)
     count_vec_df.columns = vectorizer.get_feature_names()
 
-    count_vec_df.to_csv('../../output/count_vec_df/'+train_rel+'.csv',index=False)
+    # count_vec_df.to_csv('../../output/count_vec_df/'+train_rel+'.csv',index=False)
     
-    # return clf, vectorizer
 
 # test_release is str
 def predict_defective_files_in_releases(dataset_name):
@@ -141,9 +93,9 @@ def predict_defective_files_in_releases(dataset_name):
     for rel in eval_releases:
         row_list = []
 
-        test_df = get_df(rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line,is_baseline=True)
+        test_df = get_df(rel,is_baseline=True)
 
-        test_code, train_label = prepare_data_for_LSTM(test_df, to_lowercase)
+        test_code, train_label = prepare_data(test_df, True)
 
         X = vectorizer.transform(test_code).toarray() 
 
@@ -160,6 +112,7 @@ def predict_defective_files_in_releases(dataset_name):
         result_df['project'] = [dataset_name]*len(Y_pred)
         result_df['train'] = [train_release]*len(Y_pred)
         result_df['test'] = [rel]*len(Y_pred)
+        result_df['filename'] = test_df['filename'].tolist()
         result_df['file-level-ground-truth'] = train_label
         result_df['prediction-prob'] = Y_prob
         result_df['prediction-label'] = Y_pred
