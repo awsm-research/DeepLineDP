@@ -50,12 +50,12 @@ class HierarchicalAttentionNetwork(nn.Module):
         doc_lengths = torch.tensor(doc_lengths).type(torch.LongTensor).cuda()
         sent_lengths = torch.tensor(sent_lengths).type(torch.LongTensor).cuda()
         
-        doc_embeds, word_att_weights, sent_att_weights = self.sent_attention(docs, doc_lengths, sent_lengths)
+        doc_embeds, word_att_weights, sent_att_weights, sents = self.sent_attention(docs, doc_lengths, sent_lengths)
 
         scores = self.fc(doc_embeds)
         final_scrs = self.sig(scores)
 
-        return final_scrs, word_att_weights, sent_att_weights
+        return final_scrs, word_att_weights, sent_att_weights, sents
 
 class SentenceAttention(nn.Module):
     """
@@ -155,7 +155,7 @@ class SentenceAttention(nn.Module):
         word_att_weights = word_att_weights[doc_unperm_idx]
         sent_att_weights = sent_att_weights[doc_unperm_idx]
 
-        return docs, word_att_weights, sent_att_weights
+        return docs, word_att_weights, sent_att_weights, sents
 
 
 class WordAttention(nn.Module):

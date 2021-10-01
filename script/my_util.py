@@ -37,7 +37,8 @@ all_projs = list(all_train_releases.keys())
 file_lvl_gt = '../datasets/preprocessed_data/'
 
 
-word2vec_dir = '../output/Word2Vec_model_lowercase/'
+word2vec_dir = '../output/Word2Vec_model_lowercase/with-comment-without-test-file' # remove "with-comment-without-test-file" later...
+
 # word2vec_dir = '../output/Word2Vec_model_lowercase_no_java_keywords/'
 # word2vec_dir = '../output/Word2Vec_model_cross_release/'
 
@@ -52,7 +53,6 @@ def get_df(rel, is_baseline=False):
 
     df = df.fillna('')
 
-    df = df[df['is_comment']==False]
     df = df[df['is_blank']==False]
     df = df[df['is_test_file']==False]
 
@@ -146,29 +146,29 @@ def get_w2v_weight_for_deep_learning_models(word2vec_model, embed_dim):
 
     return word2vec_weights
 
-# def pad_code(code_list_3d,max_sent_len,limit_sent_len=True, mode='train'):
-#     paded = []
+def pad_code(code_list_3d,max_sent_len,limit_sent_len=True, mode='train'):
+    paded = []
     
-#     for file in code_list_3d:
-#         sent_list = []
-#         for line in file:
-#             new_line = line
-#             if len(line) > max_seq_len:
-#                 new_line = line[:max_seq_len]
-#             sent_list.append(new_line)
+    for file in code_list_3d:
+        sent_list = []
+        for line in file:
+            new_line = line
+            if len(line) > max_seq_len:
+                new_line = line[:max_seq_len]
+            sent_list.append(new_line)
             
         
-#         if mode == 'train':
-#             if max_sent_len-len(file) > 0:
-#                 for i in range(0,max_sent_len-len(file)):
-#                     sent_list.append([0]*max_seq_len)
+        if mode == 'train':
+            if max_sent_len-len(file) > 0:
+                for i in range(0,max_sent_len-len(file)):
+                    sent_list.append([0]*max_seq_len)
 
-#         if limit_sent_len:    
-#             paded.append(sent_list[:max_sent_len])
-#         else:
-#             paded.append(sent_list)
+        if limit_sent_len:    
+            paded.append(sent_list[:max_sent_len])
+        else:
+            paded.append(sent_list)
         
-#     return paded
+    return paded
 
 def get_dataloader(code_vec, label_list,batch_size, max_sent_len):
     y_tensor =  torch.cuda.FloatTensor([label for label in label_list])
