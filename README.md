@@ -38,7 +38,8 @@ Our repository contains the following directory
 	 - `train_word2vec.py`: The source code used to train word2vec models
 	 - `DeepLineDP_model.py`: The source code that stores DeepLineDP model
 	 - `train_model.py`: The source code used to train DeepLineDP models
-	 - `generate_prediction.py`: The source code used to generate prediction
+	 - `generate_prediction.py`: The source code used to generate prediction (for RQ1-RQ3 experiment)
+     - `generate_prediction_cross_release.py`: The source code used to generate prediction (for RQ4 experiment) 
 	 - `RQ1_RQ3.R`: The source code used to generate figures for RQ1, RQ2 and RQ3 **(note: will change name later, don't forget this !!!!)**
 	 - `RQ4.R`: The source code used to obtain results for RQ4
 	 - `file-level-baseline`: The directory that stores implementation of the file-level baselines, and `baseline_util.py` that stores utility function of the baselines
