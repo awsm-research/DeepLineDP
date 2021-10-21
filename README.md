@@ -80,6 +80,11 @@ Run the command to prepare data for line-level baseline. The output will be stor
 
 	python export_data_for_line_level_baseline.py
 
+### Word2Vec model training
+
+To train Word2Vec models, run the following command:
+
+	python train_word2vec.py <DATASET_NAME>
   
 ### DeepLineDP model training and prediction generation
 

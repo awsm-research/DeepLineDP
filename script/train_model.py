@@ -20,8 +20,8 @@ arg = argparse.ArgumentParser()
 
 arg.add_argument('-dataset',type=str, default='activemq', help='software project name (lowercase)')
 arg.add_argument('-batch_size', type=int, default=32)
-arg.add_argument('-num_epochs', type=int, default=25)
-arg.add_argument('-embed_dim', type=int, default=30, help='word embedding size')
+arg.add_argument('-num_epochs', type=int, default=10)
+arg.add_argument('-embed_dim', type=int, default=50, help='word embedding size')
 arg.add_argument('-word_gru_hidden_dim', type=int, default=64, help='word attention hidden size')
 arg.add_argument('-sent_gru_hidden_dim', type=int, default=64, help='sentence attention hidden size')
 arg.add_argument('-word_gru_num_layers', type=int, default=1, help='number of GRU layer at word level')
@@ -29,11 +29,6 @@ arg.add_argument('-sent_gru_num_layers', type=int, default=1, help='number of GR
 arg.add_argument('-dropout', type=float, default=0.2, help='dropout rate')
 arg.add_argument('-lr', type=float, default=0.001, help='learning rate')
 arg.add_argument('-exp_name',type=str,default='')
-# arg.add_argument('-dir_suffix',type=str,default='rebalancing-adaptive-ratio2-new-lr2')
-
-# arg.add_argument('-include_comment',action='store_true')
-# arg.add_argument('-include_blank_line',action='store_true')
-# arg.add_argument('-include_test_file',action='store_true')
 
 args = arg.parse_args()
 
@@ -57,30 +52,8 @@ exp_name = args.exp_name
 
 max_train_LOC = 900
 
-# include_comment = args.include_comment
-# include_blank_line = args.include_blank_line
-# include_test_file = args.include_test_file
-
-# to_lowercase = True
-
-dir_suffix = 'no-rebalancing-adaptive-ratio2-lowercase'
-
-# if include_comment:
-#     dir_suffix = dir_suffix + '-with-comment'
-
-# if include_blank_line:
-#     dir_suffix = dir_suffix + '-with-blank-line'
-
-# if include_test_file:
-#     dir_suffix = dir_suffix + '-with-test-file'
-
-dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
-
-prediction_dir = '../output/prediction/DeepLineDP/'+dir_suffix+'/'
-save_model_dir = '../output/model/DeepLineDP/'+dir_suffix+'/'
-
-# prediction_dir = '../output/prediction/DeepLineDP/'
-# save_model_dir = '../output/model/DeepLineDP/'
+prediction_dir = '../output/prediction/DeepLineDP/'
+save_model_dir = '../output/model/DeepLineDP/'
 
 file_lvl_gt = '../datasets/preprocessed_data/'
 
@@ -107,7 +80,6 @@ def get_loss_weight(labels):
 
 def train_model(dataset_name):
 
-    # loss_dir = '../output/loss/'+dir_suffix+'/'
     loss_dir = '../output/loss/DeepLineDP'
     actual_save_model_dir = save_model_dir+dataset_name+'/'
 
@@ -121,15 +93,10 @@ def train_model(dataset_name):
     if not os.path.exists(loss_dir):
         os.makedirs(loss_dir)
 
-    # w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
-    
     train_rel = all_train_releases[dataset_name]
     valid_rel = all_eval_releases[dataset_name][0]
 
-    # train_df = get_df(train_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
     train_df = get_df(train_rel)
-    
-    # valid_df = get_df(valid_rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
     valid_df = get_df(valid_rel)
 
     train_code3d, train_label = get_code3d_and_label(train_df, True)
