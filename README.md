@@ -51,12 +51,14 @@ First, clone the github repository by using the following command:
 
 	git clone https://github.com/awsm-research/DeepLineDP.git
 
-Then, download the dataset from this [github](https://github.com/awsm-research/line-level-defect-prediction) and keep it in `./datasets/original/`
+Next, download the dataset from this [github](https://github.com/awsm-research/line-level-defect-prediction) and keep it in `./datasets/original/`
 
 Then, the following command to install required libraries in conda environment
 
 	conda env create -f requirements.yml
 	conda activate DeepLineDP_env
+
+Finally, install PyTorch library by following the instruction from this [link](https://pytorch.org/) (the installation instruction may be different based on OS and CUDA version)
 
 ## Experiment
 
