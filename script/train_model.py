@@ -108,7 +108,7 @@ def get_loss_weight(labels):
 def train_model(dataset_name):
 
     # loss_dir = '../output/loss/'+dir_suffix+'/'
-    loss_dir = '../output/loss/'
+    loss_dir = '../output/loss/DeepLineDP'
     actual_save_model_dir = save_model_dir+dataset_name+'/'
 
     if not exp_name == '':

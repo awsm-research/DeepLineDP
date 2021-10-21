@@ -72,10 +72,8 @@ def export_ngram_data_all_projs():
         export_data_all_releases(proj)
         print('finish',proj)
 
-# export_ngram_data_all_projs()
-
 def export_errorprone_data(proj_name):
-    cur_eval_rels = all_eval_releases[proj_name]
+    cur_eval_rels = all_eval_releases[proj_name][1:]
 
     for rel in cur_eval_rels:
 
@@ -93,8 +91,6 @@ def export_errorprone_data(proj_name):
             if 'test' in filename or '.java' not in filename:
                 continue
 
-            # print(filename)
-
             filename = filename.replace('/','_')
 
             code = list(df['SRC'])[0].strip()
@@ -104,12 +100,11 @@ def export_errorprone_data(proj_name):
 
         print('finish release',rel)
 
-        #     break
-        # break
 
 def export_error_prone_data_all_projs():
     for proj in proj_names:
         export_errorprone_data(proj)
         print('finish',proj)
 
+export_ngram_data_all_projs()
 export_error_prone_data_all_projs()

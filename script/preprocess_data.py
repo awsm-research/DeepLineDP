@@ -68,10 +68,7 @@ def preprocess_code_line(code_line, remove_java_tokens=False):
                 .replaceAll("[\\.|,|:|;|{|}|(|)]", " ")
                 .replaceAll("<[^str][^char].*?>", "");
     '''
-
     
-    # java_preserved_tokens = [] # for later experiment
-
     if remove_java_tokens:
         for tok in java_keywords:
             code_line = re.sub('\b'+tok+'\b', ' ', code_line)
