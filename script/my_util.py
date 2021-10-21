@@ -37,7 +37,7 @@ all_projs = list(all_train_releases.keys())
 file_lvl_gt = '../datasets/preprocessed_data/'
 
 
-word2vec_dir = '../output/Word2Vec_model_lowercase/with-comment-without-test-file' # remove "with-comment-without-test-file" later...
+word2vec_dir = '../output/Word2Vec_model/' # remove "with-comment-without-test-file" later...
 
 # word2vec_dir = '../output/Word2Vec_model_lowercase_no_java_keywords/'
 # word2vec_dir = '../output/Word2Vec_model_cross_release/'
@@ -121,21 +121,7 @@ def get_code3d_and_label(df, to_lowercase = False):
 
 # def get_w2v_path(include_comment=False,include_test_file=False):
 def get_w2v_path():
-    # suffix = ''
 
-    # if include_comment:
-    #     suffix = suffix + 'with-comment-'
-    # else:
-    #     suffix = suffix + 'without-comment-'
-
-    # if include_test_file:
-    #     suffix = suffix + 'with-test-file'
-    # else:
-    #     suffix = suffix + 'without-test-file'
-
-    # actual_w2v_dir = word2vec_dir+suffix+'/'
-
-    # return actual_w2v_dir
     return word2vec_dir
 
 def get_w2v_weight_for_deep_learning_models(word2vec_model, embed_dim):
