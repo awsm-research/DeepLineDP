@@ -10,11 +10,42 @@ library(caret)
 library(reshape2)
 library(pROC)
 
+library(effsize)
+library(ScottKnottESD)
+
+save.fig.dir = '../output/figure/'
+
+dir.create(file.path(save.fig.dir), showWarnings = FALSE)
+
+preprocess <- function(x, reverse){
+  colnames(x) <- c("variable","value")
+  tmp <- do.call(cbind, split(x, x$variable))
+  tmp <- tmp[, grep("value", names(tmp))]
+  names(tmp) <- gsub(".value", "", names(tmp))
+  df <- tmp
+  ranking <- NULL
+  
+  if(reverse == TRUE)
+  { 
+    ranking <- (max(sk_esd(df)$group)-sk_esd(df)$group) +1 
+  }
+  else
+  { 
+    ranking <- sk_esd(df)$group 
+  }
+  
+  x$rank <- paste("Rank",ranking[as.character(x$variable)])
+  return(x)
+}
+
 # ---------------- Code for RQ1 and RQ3 (by AJ. Pick) -----------------------#
 
 # current one
-prediction_dir = '../output/prediction/DeepLineDP/rebalancing-adaptive-ratio2-lowercase-with-comment-50-dim-6-epochs/'
+# prediction_dir = '../output/prediction/DeepLineDP/rebalancing-adaptive-ratio2-lowercase-with-comment-50-dim-6-epochs/'
 # prediction_dir = '../output/prediction/DeepLineDP/no-rebalancing-adaptive-ratio2-lowercase-with-comment-50-dim-14-epochs/'
+
+prediction_dir = '../output/prediction/DeepLineDP/rebalancing-adaptive-ratio2-lowercase-with-comment-small-batch-50-dim-10-epochs/'
+
 
 all_files = list.files(prediction_dir)
 
@@ -66,6 +97,7 @@ all.lines.token.score = rbind(clean.lines.token.score, buggy.lines.token.score)
 
 all.lines.token.score %>% ggplot(aes(x=class, y=score)) + geom_boxplot()  
 
+res = cliff.delta(buggy.lines.token.score$score, clean.lines.token.score$score)
 
 # ---------------------------RQ1-2 old idea----------------------------#
 
@@ -172,25 +204,25 @@ get.file.level.eval.result = function(prediction.dir, method.name)
     bal.acc = confusion.mat$byClass["Balanced Accuracy"]
     AUC = pROC::auc(all.gt, all.prob)
 
-    levels(all.pred)[levels(all.pred)=="False"] = 0
-    levels(all.pred)[levels(all.pred)=="True"] = 1
-    levels(all.gt)[levels(all.gt)=="True"] = 0
-    levels(all.gt)[levels(all.gt)=="False"] = 1
+    # levels(all.pred)[levels(all.pred)=="False"] = 0
+    # levels(all.pred)[levels(all.pred)=="True"] = 1
+    levels(all.gt)[levels(all.gt)=="True"] = 1
+    levels(all.gt)[levels(all.gt)=="False"] = 0
 
     all.gt = as.numeric_version(all.gt)
     all.gt = as.numeric(all.gt)
 
-    all.pred = as.numeric_version(all.pred)
-    all.pred = as.numeric(all.pred)
+    # all.pred = as.numeric_version(all.pred)
+    # all.pred = as.numeric(all.pred)
 
-    MCC = mcc(all.gt, all.pred, cutoff = 0.5) # it seems that the sign is opposite from the result in sklearn
+    MCC = mcc(all.gt, all.prob, cutoff = 0.5) 
     
     if(is.nan(MCC))
     {
       MCC = 0
     }
     
-    MCC = -1*MCC
+    # MCC = -1*MCC # it seems that the sign is opposite from the result in sklearn
 
     all.auc = append(all.auc,AUC)
     all.mcc = append(all.mcc,MCC)
@@ -211,14 +243,14 @@ get.file.level.eval.result = function(prediction.dir, method.name)
   return(result.df)
 }
 
-bi.lstm.prediction.dir = "../output/prediction/Bi-LSTM/"
+bi.lstm.prediction.dir = "../output/prediction/Bi-LSTM-6-epochs/"
 cnn.prediction.dir = "../output/prediction/CNN/"
 
 dbn.prediction.dir = "../output/prediction/DBN/"
 lr.prediction.dir = "../output/prediction/LR/"
 # deepline.dp.prediction.dir = "../output/prediction/DeepLineDP/rebalancing-adaptive-ratio2-lowercase-with-comment-50-dim-6-epochs/"
 
-bi.lstm.result = get.file.level.eval.result(bi.lstm.prediction.dir, "Bi-LSTM") # some MCC are NaN
+bi.lstm.result = get.file.level.eval.result(bi.lstm.prediction.dir, "Bi.LSTM") # some MCC are NaN
 cnn.result = get.file.level.eval.result(cnn.prediction.dir, "CNN") # some MCC are NaN
 dbn.result = get.file.level.eval.result(dbn.prediction.dir, "DBN")
 lr.result = get.file.level.eval.result(lr.prediction.dir, "LR")
@@ -231,11 +263,33 @@ all.result = rbind(bi.lstm.result, cnn.result, dbn.result, lr.result, deepline.d
 
 names(all.result) = c("AUC","MCC","Balance.Accuracy","Release", "Technique")
 
-auc.plot = ggplot(all.result, aes(x=reorder(Technique, -AUC, FUN=median), y=AUC)) + geom_boxplot() + ylab("AUC") + xlab("")
+auc.result = select(all.result, c("Technique","AUC"))
+auc.result = preprocess(auc.result,FALSE)
+auc.result[auc.result$variable=="Bi.LSTM", "variable"] = "Bi-LSTM"
 
-mcc.plot = ggplot(all.result, aes(x=reorder(Technique, -MCC, FUN=median), y=MCC)) + geom_boxplot() + ylab("MCC") + xlab("")
+mcc.result = select(all.result, c("Technique","MCC"))
+mcc.result = preprocess(mcc.result,FALSE)
+mcc.result[mcc.result$variable=="Bi.LSTM", "variable"] = "Bi-LSTM"
 
-bal.acc.plot = ggplot(all.result, aes(x=reorder(Technique, -Balance.Accuracy), y=Balance.Accuracy)) + geom_boxplot() + ylab("Balance Accuracy") + xlab("")
+bal.acc.result = select(all.result, c("Technique","Balance.Accuracy"))
+bal.acc.result = preprocess(bal.acc.result,FALSE)
+bal.acc.result[bal.acc.result$variable=="Bi.LSTM", "variable"] = "Bi-LSTM"
+
+# ggplot(auc.result, aes(x=reorder(variable, -value, FUN=median), y=value)) + geom_boxplot() + facet_grid(~rank, drop=TRUE, scales = "free", space = "free") + ylab("AUC") + xlab("")
+# ggsave(paste0(save.fig.dir,"file-AUC_new.pdf"),width=4,height=2.5)
+
+# ggplot(bal.acc.result, aes(x=reorder(variable, value, FUN=median), y=value)) + geom_boxplot() + facet_grid(~rank, drop=TRUE, scales = "free", space = "free") + ylab("Balance Accuracy") + xlab("")
+# ggsave(paste0(save.fig.dir,"file-Balance_Accuracy_new.pdf"),width=4,height=2.5)
+
+ggplot(mcc.result, aes(x=reorder(variable, value, FUN=median), y=value)) + geom_boxplot()  + facet_grid(~rank, drop=TRUE, scales = "free", space = "free") + ylab("MCC") + xlab("")
+# ggsave(paste0(save.fig.dir, "file-MCC_new.pdf"),width=4,height=2.5)
+
+
+# auc.plot = ggplot(all.result, aes(x=reorder(Technique, -AUC, FUN=median), y=AUC)) + geom_boxplot() + ylab("AUC") + xlab("")
+# 
+# mcc.plot = ggplot(all.result, aes(x=reorder(Technique, -MCC, FUN=median), y=MCC)) + geom_boxplot() + ylab("MCC") + xlab("")
+# 
+# bal.acc.plot = ggplot(all.result, aes(x=reorder(Technique, -Balance.Accuracy), y=Balance.Accuracy)) + geom_boxplot() + ylab("Balance Accuracy") + xlab("")
 
 # --------------------------------------------------------------------------#
 
@@ -277,6 +331,10 @@ get.line.metrics.result = function(baseline.df, cur.df.file)
   
   effort.list = effort20Recall$effort20Recall
   
+  # print(length(ifa.list))
+  # print(length(recall.list))
+  # print(length(effort.list))
+  
   result.df = data.frame(ifa.list, recall.list, effort.list)
   
   return(result.df)
@@ -291,8 +349,13 @@ all_eval_releases = c('activemq-5.2.0', 'activemq-5.3.0', 'activemq-5.8.0',
 error.prone.result.dir = '../output/ErrorProne_result/'
 ngram.result.dir = '../output/n_gram_result/'
 
+# note: remove pred-score column before uploading code to github (check this carefully na)
+rf.result.dir = '../output/RF-line-level-result/'
+
 n.gram.result.df = NULL
 error.prone.result.df = NULL
+rf.result.df = NULL # for predict()
+# rf.result.prob.df = NULL # for predict_proba
 
 ## get result from baseline
 for(rel in all_eval_releases)
@@ -301,6 +364,7 @@ for(rel in all_eval_releases)
   
   error.prone.result = read.csv(paste0(error.prone.result.dir,rel,'-line-lvl-result.txt'),quote="")
   
+
   levels(error.prone.result$EP_prediction_result)[levels(error.prone.result$EP_prediction_result)=="False"] = 0
   levels(error.prone.result$EP_prediction_result)[levels(error.prone.result$EP_prediction_result)=="True"] = 1
   
@@ -312,17 +376,47 @@ for(rel in all_eval_releases)
   n.gram.result = distinct(n.gram.result)
   names(n.gram.result) = c("filename", "line.number", "line.score")
   
+  
+  
   cur.df.file = filter(line.ground.truth, test==rel)
   cur.df.file = select(cur.df.file, filename, line.number, line.level.ground.truth)
   
-  # n.gram.result.with.ground.truth = merge(n.gram.result, cur.df.file, by=c("filename", "line.number"))
   
   n.gram.eval.result = get.line.metrics.result(n.gram.result, cur.df.file)
+  
+  print('finish n-gram')
+  
   error.prone.eval.result = get.line.metrics.result(error.prone.result, cur.df.file)
+  
+  print('finish error prone')
   
   n.gram.result.df = rbind(n.gram.result.df, n.gram.eval.result)
   error.prone.result.df = rbind(error.prone.result.df, error.prone.eval.result)
   
+  rf.result = read.csv(paste0(rf.result.dir,rel,'-line-lvl-result.csv'))
+  rf.result = select(rf.result, "filename", "line_number","line.score.pred")
+  names(rf.result) = c("filename", "line.number", "line.score")
+  rf.eval.result = get.line.metrics.result(rf.result, cur.df.file)
+  rf.result.df = rbind(rf.result.df, rf.eval.result)
+  
+  print('finish RF')
+  
+  print(paste0('finished ', rel))
+  
+  # rf.result.prob = select(rf.result, "filename", "line_number","line.score.prob")
+  # names(rf.result.prob) = c("filename", "line.number", "line.score")
+  # rf.eval.result = get.line.metrics.result(rf.result.prob, cur.df.file)
+  # rf.result.prob.df = rbind(rf.result.prob.df, rf.eval.result)
+  # missing Derby in RF-line-level here... just skip it
+  # try({
+  #   
+  #   rf.result = read.csv(paste0(rf.result.dir,rel,'-line-lvl-result.csv'))
+  #   rf.result = select(rf.result, "filename", "line_number","score")
+  #   names(rf.result) = c("filename", "line.number", "line.score")
+  #   rf.eval.result = get.line.metrics.result(rf.result, cur.df.file)
+  #   rf.result.df = rbind(rf.result.df, rf.eval.result)
+  #   
+  # }, silent = TRUE)
 }
 
 #Force attention score of comment line is 0
@@ -390,23 +484,44 @@ deeplinedp.effort = effort20Recall$effort20Recall
 
 deepline.dp.line.result = data.frame(deeplinedp.ifa, deeplinedp.recall, deeplinedp.effort)
 
+names(rf.result.df) = c("IFA", "Recall20%LOC", "Effort@20%Recall")
+# names(rf.result.prob.df) = c("IFA", "Recall20%LOC", "Effort@20%Recall")
 names(n.gram.result.df) = c("IFA", "Recall20%LOC", "Effort@20%Recall")
 names(error.prone.result.df)  = c("IFA", "Recall20%LOC", "Effort@20%Recall")
 names(deepline.dp.line.result) = c("IFA", "Recall20%LOC", "Effort@20%Recall")
 
-n.gram.result.df$technique = 'N-gram'
+rf.result.df$technique = 'RF'
+# rf.result.prob.df$technique = 'RF-Prob'
+n.gram.result.df$technique = 'N.gram'
 error.prone.result.df$technique = 'ErrorProne'
 deepline.dp.line.result$technique = 'DeepLineDP'
 
-all.line.result = rbind(n.gram.result.df, error.prone.result.df, deepline.dp.line.result)
+all.line.result = rbind(rf.result.df, n.gram.result.df, error.prone.result.df, deepline.dp.line.result)
 
-recall.plot = ggplot(all.line.result, aes(x=reorder(technique, -`Recall20%LOC`, FUN=median), y=`Recall20%LOC`)) + geom_boxplot()  + ylab("Recall@Top20LOC") + xlab("")
-# ggsave(paste0("file-Recall@Top20LOC_new.pdf"),width=4,height=2.5)
+recall.result.df = select(all.line.result, c('technique', 'Recall20%LOC'))
+ifa.result.df = select(all.line.result, c('technique', 'IFA'))
+effort.result.df = select(all.line.result, c('technique', 'Effort@20%Recall'))
 
-effort.plot = ggplot(all.line.result, aes(x=reorder(technique, `Effort@20%Recall`, FUN=median), y=`Effort@20%Recall`)) + geom_boxplot() +  ylab("Effort@Top20Recall") + xlab("")
-# ggsave(paste0("file-Effort@Top20Recall_new.pdf"),width=4,height=2.5)
+recall.result.df = preprocess(recall.result.df, FALSE)
+ifa.result.df = preprocess(ifa.result.df, TRUE)
+effort.result.df = preprocess(effort.result.df, TRUE)
 
-ifa.plot = ggplot(all.line.result, aes(x=reorder(technique, IFA, FUN=median), y=IFA)) + geom_boxplot()  + coord_cartesian(ylim=c(0,200))  + ylab("IFA") + xlab("")
+ggplot(recall.result.df, aes(x=reorder(variable, -value, FUN=median), y=value)) + geom_boxplot() + facet_grid(~rank, drop=TRUE, scales = "free", space = "free") + ylab("Recall@Top20%LOC") + xlab("")
+ggsave(paste0(save.fig.dir,"file-Recall@Top20LOC_new.pdf"),width=4,height=2.5)
+
+ggplot(effort.result.df, aes(x=reorder(variable, value, FUN=median), y=value)) + geom_boxplot() + facet_grid(~rank, drop=TRUE, scales = "free", space = "free") + ylab("Effort@Top20%Recall") + xlab("")
+ggsave(paste0(save.fig.dir,"file-Effort@Top20Recall_new.pdf"),width=4,height=2.5)
+
+ggplot(ifa.result.df, aes(x=reorder(variable, value, FUN=median), y=value)) + geom_boxplot()  + coord_cartesian(ylim=c(0,175)) + facet_grid(~rank, drop=TRUE, scales = "free", space = "free") + ylab("IFA") + xlab("")
+ggsave(paste0(save.fig.dir, "file-IFA_new.pdf"),width=4,height=2.5)
+
+# recall.plot = ggplot(all.line.result, aes(x=reorder(technique, -`Recall20%LOC`, FUN=median), y=`Recall20%LOC`)) + geom_boxplot()  + ylab("Recall@Top20LOC") + xlab("")
+# # ggsave(paste0("file-Recall@Top20LOC_new.pdf"),width=4,height=2.5)
+# 
+# effort.plot = ggplot(all.line.result, aes(x=reorder(technique, `Effort@20%Recall`, FUN=median), y=`Effort@20%Recall`)) + geom_boxplot() +  ylab("Effort@Top20Recall") + xlab("")
+# # ggsave(paste0("file-Effort@Top20Recall_new.pdf"),width=4,height=2.5)
+# 
+# ifa.plot = ggplot(all.line.result, aes(x=reorder(technique, IFA, FUN=median), y=IFA)) + geom_boxplot()  + coord_cartesian(ylim=c(0,200))  + ylab("IFA") + xlab("")
 # ggsave(paste0("file-IFA_new.pdf"),width=4,height=2.5)
 
 
@@ -417,10 +532,11 @@ file.level.by.project = deepline.dp.result %>% group_by(project) %>% summarise(m
 
 names(file.level.by.project) = c("project", "AUC", "MCC", "Balance Accurracy")
 
-
+df_loc = df_all_correct_predict %>% select(test, filename, line.number) %>% distinct() %>% group_by(test, filename) %>% mutate(loc = n()) %>% select(test, filename, loc) %>% distinct()
 
 IFA$project = str_replace(IFA$test, '-.*','')
 recall20LOC$project = str_replace(recall20LOC$test, '-.*','')
+recall20LOC$project = as.factor(recall20LOC$project)
 effort20Recall$project = str_replace(effort20Recall$test, '-.*','')
 
 ifa.each.project = IFA %>% group_by(project) %>% summarise(median.by.project = median(order))
@@ -431,3 +547,81 @@ line.level.all.median.by.project = data.frame(ifa.each.project$project, ifa.each
 
 names(line.level.all.median.by.project) = c("project", "IFA", "recall", "effort")
 
+recall.with.loc = merge(recall20LOC, df_loc, by=c("test","filename"))
+
+########################################################################
+
+# for analyzing line-level result
+# will remove later...
+
+
+oov.count.dir = '../output/oov_count/'
+oov.count.files = list.files(oov.count.dir)
+all.oov.df = NULL
+
+token.stat.dir = '../output/token_freq_stat/'
+token.stat.files = list.files(token.stat.dir)
+all.token.stat.df = NULL
+
+for(f in token.stat.files)
+{
+  token.stat.df = read.csv(paste0(token.stat.dir,f))
+  all.token.stat.df = rbind(all.token.stat.df, token.stat.df)
+}
+
+names(all.token.stat.df) = c("filename",    "code_line",   "line.number", "line.label",  "tok.freq.avg",    "tok.freq.median")
+
+sorted.with.token.stat = merge(sorted, all.token.stat.df, by=c('filename','line.number'))
+
+sorted.with.token.stat = select(sorted.with.token.stat, c("filename", "line.number", "test", "line.level.ground.truth", "attention_score", "num_tokens", "order", "code_line", "line.label", "tok.freq.avg",  "tok.freq.median"))
+
+sorted.with.token.stat$project = str_replace(sorted.with.token.stat$test,'-.*', '')
+
+sample.sorted.with.token.stat = filter(sorted.with.token.stat, project=="wicket", filename=="wicket-core/src/main/java/org/apache/wicket/request/mapper/CryptoMapper.java")
+
+
+ggplot(data=sample.sorted.with.token.stat, aes(x=tok.freq.avg, y=attention_score, group=line.level.ground.truth)) + geom_point(aes(color=line.level.ground.truth, shape=line.level.ground.truth))
+
+
+
+#---------------------------------------------------------------------#
+
+for(f in oov.count.files)
+{
+  oov.df = read.csv(paste0(oov.count.dir,f))
+  all.oov.df = rbind(all.oov.df, oov.df)
+}
+
+
+
+
+
+sorted.with.oov = merge(sorted, all.oov.df, by=c('filename','line.number'))
+
+sorted.with.oov = select(sorted.with.oov, c("filename", "line.number", "test", "line.level.ground.truth", "attention_score", "num_tokens", "order", "code_line", "line.label", "oov_count"))
+
+sorted.with.oov$project = str_replace(sorted.with.oov$test,'-.*', '')
+
+sorted.with.oov$oov.ratio = sorted.with.oov$oov_count/sorted.with.oov$num_tokens
+
+sorted.with.oov$avg.line.score = sorted.with.oov$attention_score/sorted.with.oov$num_tokens
+
+sorted.with.oov$non.oov.count = sorted.with.oov$num_tokens - sorted.with.oov$oov_count
+
+sorted.with.oov$non.oov.ratio = sorted.with.oov$non.oov.count / sorted.with.oov$num_tokens
+
+sample.sorted.with.oov = filter(sorted.with.oov, project=="wicket", filename=="wicket-core/src/main/java/org/apache/wicket/markup/html/form/RadioChoice.java")
+
+# clean.sample.sorted.with.oov = filter(sample.sorted.with.oov, line.label=="False")
+# defect.sample.sorted.with.oov = filter(sample.sorted.with.oov, line.label=="True")
+
+ggplot(data=sample.sorted.with.oov, aes(x=non.oov.ratio, y=attention_score, group=line.level.ground.truth)) + geom_point(aes(color=line.level.ground.truth, shape=line.level.ground.truth))
+
+# ggplot(data=sample.sorted.with.oov, aes(x=oov_count, y=attention_score, group=line.level.ground.truth)) + geom_point(aes(color=line.level.ground.truth))
+
+# ggplot(data=sample.sorted.with.oov, aes(x=num_tokens, y=attention_score, group=line.level.ground.truth)) + geom_point(aes(color=line.level.ground.truth, shape=line.level.ground.truth))
+
+# ggplot(data=sample.sorted.with.oov, aes(x=oov.ratio, y=attention_score, group=line.level.ground.truth)) + geom_point(aes(color=line.level.ground.truth))
+
+
+########################################################################
