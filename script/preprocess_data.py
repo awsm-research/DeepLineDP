@@ -6,11 +6,8 @@ from my_util import *
 
 data_root_dir = '../datasets/original/'
 save_dir = "../datasets/preprocessed_data/"
-# save_dir = "../datasets/preprocessed_data_no_java_keywords/"
 
 char_to_remove = ['+','-','*','/','=','++','--','\\','<str>','<char>','|','&','!']
-
-java_keywords = ['abstract', 'assert', 'boolean', 'break', 'byte', 'case', 'catch', 'char', 'class', 'const', 'continue', 'default', 'double', 'do', 'else', 'enum', 'extends', 'false', 'final', 'finally', 'float', 'for', 'goto', 'if', 'implements', 'import', 'instanceof', 'int', 'interface', 'long', 'native', 'new', 'null', 'package', 'private', 'protected', 'public', 'return', 'short', 'static', 'strictfp', 'super', 'switch', 'synchronized', 'this', 'throw', 'throws', 'transient', 'true', 'try', 'void', 'volatile', 'while']
 
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
@@ -52,26 +49,11 @@ def is_empty_line(code_line):
 
     return False
 
-def preprocess_code_line(code_line, remove_java_tokens=False):
+def preprocess_code_line(code_line):
     '''
         input
             code_line (string)
     '''
-
-    '''
-        java_code = java_code.replaceAll("!", " ! ")
-                .replaceAll("\\+\\+", " \\+\\+ ").replaceAll("--", " -- ")
-                .replace('\\',' ').replaceAll("\'\'", "\'")
-                .replaceAll("\".*?\"", "<str>")		
-                .replaceAll("\'.*?\'", " <char> ")
-                .replaceAll("\\[.*?\\]", "")
-                .replaceAll("[\\.|,|:|;|{|}|(|)]", " ")
-                .replaceAll("<[^str][^char].*?>", "");
-    '''
-    
-    if remove_java_tokens:
-        for tok in java_keywords:
-            code_line = re.sub('\b'+tok+'\b', ' ', code_line)
 
     code_line = re.sub("\'\'", "\'", code_line)
     code_line = re.sub("\".*?\"", "<str>", code_line)
@@ -83,15 +65,11 @@ def preprocess_code_line(code_line, remove_java_tokens=False):
     for char in char_to_remove:
         code_line = code_line.replace(char,' ')
 
-    # code_line = code_line.replace('<str>','')
-    # code_line = code_line.replace('<char>','')
-
-
     code_line = code_line.strip()
 
     return code_line
 
-def create_code_df(code_str, filename, remove_java_tokens=False):
+def create_code_df(code_str, filename):
     '''
         input
             code_str (string): a source code
@@ -107,8 +85,6 @@ def create_code_df(code_str, filename, remove_java_tokens=False):
 
     df = pd.DataFrame()
 
-    # print(code_str)
-
     code_lines = code_str.splitlines()
     
     preprocess_code_lines = []
@@ -117,12 +93,8 @@ def create_code_df(code_str, filename, remove_java_tokens=False):
 
 
     comments = re.findall(r'(/\*[\s\S]*?\*/)',code_str,re.DOTALL)
-    # comments.remove('')
     comments_str = '\n'.join(comments)
     comments_list = comments_str.split('\n')
-
-    # print(filename)
-    # print(len(code_lines))
 
     for l in code_lines:
         l = l.strip()
@@ -131,7 +103,7 @@ def create_code_df(code_str, filename, remove_java_tokens=False):
         # preprocess code here then check empty line...
 
         if not is_comment:
-            l = preprocess_code_line(l, remove_java_tokens)
+            l = preprocess_code_line(l)
             
         is_blank_line.append(is_empty_line(l))
         preprocess_code_lines.append(l)
@@ -150,9 +122,8 @@ def create_code_df(code_str, filename, remove_java_tokens=False):
 
     return df
 
-def preprocess_data(proj_name, remove_java_tokens=False):
+def preprocess_data(proj_name):
 
-    # proj_name = 'activemq'
     cur_all_rel = all_releases[proj_name]
 
     for rel in cur_all_rel:
@@ -175,47 +146,21 @@ def preprocess_data(proj_name, remove_java_tokens=False):
             code = row['SRC']
             label = row['Bug']
 
-            code_df = create_code_df(code, filename, remove_java_tokens)
+            code_df = create_code_df(code, filename)
             code_df['file-label'] = [label]*len(code_df)
             code_df['line-label'] = [False]*len(code_df)
-
-            # then add is_bug column here (for file-level ground truth)
 
             if filename in buggy_files:
                 buggy_lines = list(line_level_data[line_level_data['File']==filename]['Line_number'])
                 code_df['line-label'] = code_df['line_number'].isin(buggy_lines)
-                # print(code_df)
-                # print(filename)
-                # code_df.to_csv('test.csv')
-                # break
-
-            # if len(code_df) < 1:
-            #     print(filename)
-            #     print(code_df)
-            #     break
-
-            # code_df = code_df.fillna(False)
 
             if len(code_df) > 0:
                 preprocessed_df_list.append(code_df)
-
-            # if code_df.isna().values.any():
-            #     print(filename)
-            #     print(code_df)
-            #     print(code.isna().any())
-            #     break
-
-            # print(filename, code_df.isnull().values.any())
-
-            # break
-
-        # break
 
         all_df = pd.concat(preprocessed_df_list)
         all_df.to_csv(save_dir+rel+".csv",index=False)
         print('finish release {}'.format(rel))
 
 for proj in list(all_releases.keys()):
-    # preprocess_data(proj, True) # remove java token
-    preprocess_data(proj, False)
+    preprocess_data(proj)
 
