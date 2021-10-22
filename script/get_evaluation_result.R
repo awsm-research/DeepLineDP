@@ -98,6 +98,40 @@ res = cliff.delta(buggy.lines.token.score$score, clean.lines.token.score$score)
 
 # ---------------- Code for RQ2 -----------------------#
 
+get.file.level.metrics = function(df.file)
+{
+  all.gt = df.file$file.level.ground.truth
+  all.prob = df.file$prediction.prob
+  all.pred = df.file$prediction.label
+  
+  confusion.mat = confusionMatrix(all.pred, reference = all.gt)
+  
+  bal.acc = confusion.mat$byClass["Balanced Accuracy"]
+  AUC = pROC::auc(all.gt, all.prob)
+  
+  levels(all.pred)[levels(all.pred)=="False"] = 0
+  levels(all.pred)[levels(all.pred)=="True"] = 1
+  levels(all.gt)[levels(all.gt)=="False"] = 0
+  levels(all.gt)[levels(all.gt)=="True"] = 1
+  
+  all.gt = as.numeric_version(all.gt)
+  all.gt = as.numeric(all.gt)
+  
+  all.pred = as.numeric_version(all.pred)
+  all.pred = as.numeric(all.pred)
+  
+  MCC = mcc(all.gt, all.pred, cutoff = 0.5) 
+  
+  if(is.nan(MCC))
+  {
+    MCC = 0
+  }
+  
+  eval.result = c(AUC, MCC, bal.acc)
+  
+  return(eval.result)
+}
+
 get.file.level.eval.result = function(prediction.dir, method.name)
 {
   all_files = list.files(prediction.dir)
@@ -119,28 +153,12 @@ get.file.level.eval.result = function(prediction.dir, method.name)
       df = distinct(df)
     }
     
-    all.gt = df$file.level.ground.truth
-    all.prob = df$prediction.prob
-    all.pred = df$prediction.label
+    file.level.result = get.file.level.metrics(df)
 
-    confusion.mat = confusionMatrix(all.pred, reference = all.gt)
+    AUC = file.level.result[1]
+    MCC = file.level.result[2]
+    bal.acc = file.level.result[3]
 
-    bal.acc = confusion.mat$byClass["Balanced Accuracy"]
-    AUC = pROC::auc(all.gt, all.prob)
-
-    levels(all.gt)[levels(all.gt)=="True"] = 1
-    levels(all.gt)[levels(all.gt)=="False"] = 0
-
-    all.gt = as.numeric_version(all.gt)
-    all.gt = as.numeric(all.gt)
-
-    MCC = mcc(all.gt, all.prob, cutoff = 0.5) 
-    
-    if(is.nan(MCC))
-    {
-      MCC = 0
-    }
-    
     all.auc = append(all.auc,AUC)
     all.mcc = append(all.mcc,MCC)
     all.bal.acc = append(all.bal.acc,bal.acc)
@@ -149,8 +167,7 @@ get.file.level.eval.result = function(prediction.dir, method.name)
   }
   
   result.df = data.frame(all.auc,all.mcc,all.bal.acc)
-  
-  all.test.rels = str_replace(all.test.rels, "-6-epochs.csv", "")
+
   all.test.rels = str_replace(all.test.rels, ".csv", "")
   
   result.df$release = all.test.rels
@@ -292,7 +309,6 @@ for(rel in all_eval_releases)
   
 }
 
-
 #Force attention score of comment line is 0
 df_all[df_all$is.comment.line == "True",]$token.attention.score = 0
 
@@ -363,7 +379,7 @@ ggsave(paste0(save.fig.dir, "file-IFA_new.pdf"),width=4,height=2.5)
 
 # ---------------- Code for RQ4 -----------------------#
 
-## for getting result of each project
+## get within-project result
 deepline.dp.result$project = c("activemq", "activemq", "activemq", "camel", "camel", "derby", "groovy", "hbase", "hive", "jruby", "jruby", "lucene", "lucene", "wicket")
 
 file.level.by.project = deepline.dp.result %>% group_by(project) %>% summarise(median.AUC = median(all.auc), median.MCC = median(all.mcc), median.bal.acc = median(all.bal.acc))
@@ -382,3 +398,106 @@ effort.each.project = effort20Recall %>% group_by(project) %>% summarise(median.
 line.level.all.median.by.project = data.frame(ifa.each.project$project, ifa.each.project$median.by.project, recall.each.project$median.by.project, effort.each.project$median.by.project)
 
 names(line.level.all.median.by.project) = c("project", "IFA", "Recall20%LOC", "Effort@20%Recall")
+
+
+## get cross-project result
+
+prediction.dir = '../output/prediction/DeepLineDP/cross-release/'
+projs = c('activemq', 'camel', 'derby', 'groovy', 'hbase', 'hive', 'jruby', 'lucene', 'wicket')
+
+
+get.line.level.metrics = function(df_all)
+{
+  #Force attention score of comment line is 0
+  df_all[df_all$is.comment.line == "True",]$token.attention.score = 0
+
+  sum_line_attn = df_all %>% filter(file.level.ground.truth == "True" & prediction.label == "True") %>% group_by(filename,is.comment.line, file.level.ground.truth, prediction.label, line.number, line.level.ground.truth) %>%
+    summarize(attention_score = sum(token.attention.score), num_tokens = n())
+  sorted = sum_line_attn %>% group_by(filename) %>% arrange(-attention_score, .by_group=TRUE) %>% mutate(order = row_number())
+  
+  # calculate IFA
+  IFA = sorted %>% filter(line.level.ground.truth == "True") %>% group_by(filename) %>% top_n(1, -order)
+  total_true = sorted %>% group_by(filename) %>% summarize(total_true = sum(line.level.ground.truth == "True"))
+  
+  # calculate Recall20%LOC
+  recall20LOC = sorted %>% group_by(filename) %>% mutate(effort = round(order/n(),digits = 2 )) %>% filter(effort <= 0.2) %>%
+    summarize(correct_pred = sum(line.level.ground.truth == "True")) %>%
+    merge(total_true) %>% mutate(recall20LOC = correct_pred/total_true)
+
+  # calculate Effort20%Recall
+  effort20Recall = sorted %>% merge(total_true) %>% group_by(filename) %>% mutate(cummulative_correct_pred = cumsum(line.level.ground.truth == "True"), recall = round(cumsum(line.level.ground.truth == "True")/total_true, digits = 2)) %>%
+    summarise(effort20Recall = sum(recall <= 0.2)/n())
+  
+  all.ifa = IFA$order
+  all.recall = recall20LOC$recall20LOC
+  all.effort = effort20Recall$effort20Recall
+  
+  result.df = data.frame(all.ifa, all.recall, all.effort)
+  
+  return(result.df)
+}
+
+med.auc = c()
+med.mcc = c()
+med.bal.acc = c()
+
+med.ifa = c()
+med.recall = c()
+med.effort = c()
+
+
+for(p in projs)
+{
+  actual.pred.dir = paste0(prediction.dir,p,'/')
+  
+  all.files = list.files(actual.pred.dir)
+  
+  all.auc = c()
+  all.mcc = c()
+  all.bal.acc = c()
+  
+  all.line.result = NULL
+  
+  
+  for(f in all.files)
+  {
+    df = read.csv(paste0(actual.pred.dir,f))
+    df = as_tibble(df)
+    
+    df.file = select(df, c(train, test, filename, file.level.ground.truth, prediction.prob, prediction.label))
+    
+    df.file = distinct(df.file)
+
+    file.level.result = get.file.level.metrics(df.file)
+
+    AUC = file.level.result[1]
+    MCC = file.level.result[2]
+    bal.acc = file.level.result[3]
+
+    all.auc = append(all.auc, AUC)
+    all.mcc = append(all.mcc, MCC)
+    all.bal.acc = append(all.bal.acc, bal.acc)
+
+    line.level.result = get.line.level.metrics(df)
+
+    all.line.result = rbind(all.line.result, line.level.result)
+
+    print(paste0('finished ',f))
+    
+  }
+  
+  med.auc = append(med.auc, median(all.auc))
+  med.mcc = append(med.mcc, median(all.mcc))
+  med.bal.acc = append(med.bal.acc, median(all.bal.acc))
+  
+  med.ifa = append(med.ifa, median(all.line.result$all.ifa))
+  med.recall = append(med.recall, median(all.line.result$all.recall))
+  med.effort = append(med.effort, median(all.line.result$all.effort))
+  
+  
+  print(paste0('finished ',p))
+}
+
+cross.project.result.df = data.frame(projs, med.auc, med.bal.acc, med.mcc, med.recall, med.effort, med.ifa)
+
+names(cross.project.result.df) = c("project", "AUC", "Balance Accuracy", "MCC", "Recall", "Effort", "IFA")
