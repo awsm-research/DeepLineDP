@@ -84,9 +84,9 @@ class SentenceAttention(nn.Module):
     def forward(self, code_tensor, code_lengths, sent_lengths):
 
         # Sort code_tensor by decreasing order in length
-        code_lengths, doc_perm_idx = code_lengths.sort(dim=0, descending=True)
-        code_tensor = code_tensor[doc_perm_idx]
-        sent_lengths = sent_lengths[doc_perm_idx]
+        code_lengths, code_perm_idx = code_lengths.sort(dim=0, descending=True)
+        code_tensor = code_tensor[code_perm_idx]
+        sent_lengths = sent_lengths[code_perm_idx]
 
         # Make a long batch of sentences by removing pad-sentences
         # i.e. `code_tensor` was of size (num_code_tensor, padded_code_lengths, padded_sent_length)
@@ -139,7 +139,7 @@ class SentenceAttention(nn.Module):
         word_att_weights, _ = pad_packed_sequence(PackedSequence(word_att_weights, valid_bsz), batch_first=True)
 
         # Restore the original order of documents (undo the first sorting)
-        _, code_tensor_unperm_idx = doc_perm_idx.sort(dim=0, descending=False)
+        _, code_tensor_unperm_idx = code_perm_idx.sort(dim=0, descending=False)
         code_tensor = code_tensor[code_tensor_unperm_idx]
 
         word_att_weights = word_att_weights[code_tensor_unperm_idx]

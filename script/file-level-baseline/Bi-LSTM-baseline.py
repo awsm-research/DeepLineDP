@@ -34,7 +34,6 @@ torch.manual_seed(0)
 # model parameters
 
 batch_size = 32
-output_size = 1
 embed_dim = 50
 hidden_dim = 64
 lr = 0.001
@@ -42,58 +41,31 @@ epochs = args.epochs
 
 exp_name = args.exp_name
 
-save_every_epochs = 1 # default is 5
+save_every_epochs = 1
 
 max_seq_len = 50
-
-# include_comment = True
-# include_blank_line = False
-# include_test_file = False
-
-# to_lowercase = True
-
-# dir_suffix = 'lowercase'
-
-# if include_comment:
-#     dir_suffix = dir_suffix + '-with-comment'
-
-# if include_blank_line:
-#     dir_suffix = dir_suffix + '-with-blank-line'
-
-# if include_test_file:
-#     dir_suffix = dir_suffix + '-with-test-file'
-
-# dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
 
 
 save_model_dir = '../../output/model/Bi-LSTM/'
 save_prediction_dir = '../../output/prediction/Bi-LSTM/'
 
-# loss_dir = '../../output/loss/Bi-LSTM/'
-
-
 if not os.path.exists(save_prediction_dir):
     os.makedirs(save_prediction_dir)
 
-# if not os.path.exists(loss_dir):
-#     os.makedirs(loss_dir)
-
 class LSTMClassifier(nn.Module):
-    def __init__(self, batch_size, output_size, hidden_size, vocab_size, embedding_length):
+    def __init__(self, batch_size, hidden_size, vocab_size, embedding_length):
         super(LSTMClassifier, self).__init__()
 
         """
         Arguments
         ---------
         batch_size : Size of the batch
-        output_size : 1
         hidden_sie : Size of the hidden_state of the LSTM
         vocab_size : Size of the vocabulary containing unique words
         embedding_length : Embeddding dimension word embeddings
         """
 
         self.batch_size = batch_size
-        self.output_size = output_size
         self.hidden_size = hidden_size
         self.vocab_size = vocab_size
         self.embedding_length = embedding_length
@@ -106,7 +78,7 @@ class LSTMClassifier(nn.Module):
         self.dropout = nn.Dropout(0.2)
         
         # linear and sigmoid layer
-        self.fc = nn.Linear(hidden_dim, output_size)
+        self.fc = nn.Linear(hidden_dim, 1)
         self.sig = nn.Sigmoid()
 
     def forward(self, input_tensor):
@@ -119,7 +91,6 @@ class LSTMClassifier(nn.Module):
         Returns
         -------
         Output of the linear layer containing logits for positive & negative class which receives its input as the final_hidden_state of the LSTM
-        final_output.shape = (batch_size, output_size)
 
         """
 
@@ -139,17 +110,8 @@ class LSTMClassifier(nn.Module):
         
         return sig_out
 
-
-
-
-
-
-
-
-
 def train_model(dataset_name):
 
-    # loss_dir = '../../output/loss/Bi-LSTM/'+dir_suffix+'/'
     loss_dir = '../../output/loss/Bi-LSTM/'
     actual_save_model_dir = save_model_dir+dataset_name+'/'
 
@@ -185,7 +147,7 @@ def train_model(dataset_name):
     train_dl = get_dataloader(word2vec_model, train_code,train_label, padding_idx, batch_size)
     valid_dl = get_dataloader(word2vec_model, valid_code,valid_label, padding_idx, batch_size)
 
-    net = LSTMClassifier(batch_size, output_size, hidden_dim, vocab_size, embed_dim)
+    net = LSTMClassifier(batch_size, hidden_dim, vocab_size, embed_dim)
 
     net = net.cuda()
     
@@ -287,12 +249,11 @@ def train_model(dataset_name):
     print('finished training model of',dataset_name)
 
     
-# epoch (int): which epoch to load model
+# target_epochs (int): which epoch to load model
 def predict_defective_files_in_releases(dataset_name, target_epochs = 6):
     actual_save_model_dir = save_model_dir+dataset_name+'/'
 
     w2v_dir = get_w2v_path()
-        # w2v_dir = '../'+w2v_dir
     w2v_dir = os.path.join('../'+w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
 
     train_rel = all_train_releases[dataset_name]
@@ -302,7 +263,7 @@ def predict_defective_files_in_releases(dataset_name, target_epochs = 6):
     
     vocab_size = len(word2vec_model.wv.vocab) + 1
 
-    net = LSTMClassifier(1, output_size, hidden_dim, vocab_size, embed_dim)
+    net = LSTMClassifier(1, hidden_dim, vocab_size, embed_dim)
 
     checkpoint = torch.load(actual_save_model_dir+'checkpoint_'+target_epochs+'epochs.pth')
 

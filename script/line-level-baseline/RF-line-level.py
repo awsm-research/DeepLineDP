@@ -22,26 +22,6 @@ if not os.path.exists(model_dir):
 if not os.path.exists(result_dir):
     os.makedirs(result_dir)
 
-'''
-    train model step
-    1. load DeepLineDP model and Word2Vec
-    2. load data by using get_df() function
-    3. get label from step 2.
-    4. perform prediction like in generate_prediction.py to get line representation
-    5. concatenate the line representation as numpy array
-    6. throw wtf to RF (or SVM in case RF is good)
-    7. save model to ../model/RF-line-level
-
-    testing step
-    1. load DeepLineDP, RF and Word2Vec model
-    2. load prediction result and only get buggy files (filter clean line)
-    3. get label from step 2.
-    4. load line representation from the saved file
-    5. use line representation to perform prediction with trained model
-    6. store prediction result in dataframe
-    7. concatenate dataframe again
-'''
-
 max_grad_norm = 5
 embed_dim = 50
 word_gru_hidden_dim = 64
@@ -52,14 +32,7 @@ word_att_dim = 64
 sent_att_dim = 64
 use_layer_norm = True
 
-
-include_comment = True
-include_blank_line = False
-include_test_file = False
-
 to_lowercase = True
-
-max_sent_len = 999999
 
 def get_DeepLineDP_and_W2V(dataset_name):
     w2v_dir = get_w2v_path()
@@ -85,7 +58,7 @@ def get_DeepLineDP_and_W2V(dataset_name):
         use_layer_norm=use_layer_norm,
         dropout=0.001)
 
-    checkpoint = torch.load('../../output/model/DeepLineDP/rebalancing-adaptive-ratio2-lowercase-with-comment-50-dim/'+dataset_name+'/checkpoint_6epochs.pth')
+    checkpoint = torch.load('../../output/model/DeepLineDP/'+dataset_name+'/checkpoint_7epochs.pth')
 
 
     model.load_state_dict(checkpoint['model_state_dict'])
@@ -106,11 +79,10 @@ def train_RF_model(dataset_name):
 
     train_df = get_df(train_rel, is_baseline=True)
     
-    # row_list = [] # for creating dataframe later...
-
     line_rep_list = []
     all_line_label = []
 
+    # loop to get line representation of each file in train data
     for filename, df in tqdm(train_df.groupby('filename')):
 
         code = df['code_line'].tolist()
@@ -171,7 +143,7 @@ def predict_defective_line(dataset_name):
 
             with torch.no_grad():
                 codevec_padded_tensor = torch.tensor(codevec)
-            _, __, ___, line_rep = model(codevec_padded_tensor)
+                _, __, ___, line_rep = model(codevec_padded_tensor)
 
             numpy_line_rep = line_rep.cpu().detach().numpy()
 

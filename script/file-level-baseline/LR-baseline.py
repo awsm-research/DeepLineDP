@@ -12,8 +12,6 @@ sys.path.append('../')
 
 from my_util import *
 
-from tqdm import tqdm
-
 from imblearn.over_sampling import SMOTE 
 
 warnings.filterwarnings('ignore')

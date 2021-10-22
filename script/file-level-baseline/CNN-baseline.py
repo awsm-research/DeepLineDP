@@ -1,7 +1,6 @@
 import torch.nn as nn
 import torch
 import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
 from torch.nn import functional as F
 
 import pandas as pd
@@ -31,41 +30,16 @@ args = arg.parse_args()
 # model parameters
 
 batch_size = 32
-output_size = 1
 embed_dim = 50
 n_filters = 100      # default is 100
-# kernel_size = [5,5,5] # for 3 conv layers
 lr = 0.001
 
-epochs = args.epochs # default is 100
-save_every_epochs = 2 # default is 5
+epochs = args.epochs 
+save_every_epochs = 1
 max_seq_len = 50 # number of tokens of each line in a file
 max_train_LOC = 900 # max length of all code in the whole dataset
 
 exp_name = args.exp_name
-
-save_every_epochs = 2 # default is 5
-
-
-# include_comment = True
-# include_blank_line = False
-# include_test_file = False
-
-# to_lowercase = True
-
-# dir_suffix = 'lowercase'
-
-# if include_comment:
-#     dir_suffix = dir_suffix + '-with-comment'
-
-# if include_blank_line:
-#     dir_suffix = dir_suffix + '-with-blank-line'
-
-# if include_test_file:
-#     dir_suffix = dir_suffix + '-with-test-file'
-
-# dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
-
 
 save_model_dir = '../../output/model/CNN/'
 save_prediction_dir = '../../output/prediction/CNN/'
@@ -74,20 +48,18 @@ if not os.path.exists(save_prediction_dir):
     os.makedirs(save_prediction_dir)
 
 class CNN(nn.Module):
-    def __init__(self, batch_size, output_size, in_channels, out_channels,  keep_probab, vocab_size, embedding_dim):
+    def __init__(self, batch_size, in_channels, out_channels,  keep_probab, vocab_size, embedding_dim):
         super(CNN, self).__init__()
         '''
         Arguments
         ---------
         batch_size : Size of each batch
-        output_size : 1
         in_channels : Number of input channels. Here it is 1 as the input data has dimension = (batch_size, num_seq, embedding_length)
         out_channels : Number of output channels after convolution operation performed on the input matrix
         keep_probab : Probability of retaining an activation node during dropout operation
         vocab_size : Size of the vocabulary containing unique words
         '''
         self.batch_size = batch_size
-        self.output_size = output_size
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.vocab_size = vocab_size
@@ -99,11 +71,8 @@ class CNN(nn.Module):
 
 
         self.dropout = nn.Dropout(keep_probab)
-        # self.fc = nn.Linear(len(kernel_heights)*out_channels, output_size)
-        # self.fc = nn.Linear(100 * len(window_sizes), 1)
         self.fc = nn.Linear(100, 1)
 
-        # not change to softmax because we do binary classification
         self.sig = nn.Sigmoid()
 
     def conv_block(self, input, conv_layer):
@@ -112,78 +81,37 @@ class CNN(nn.Module):
         conv_out = torch.squeeze(conv_out,-1)
         max_out = F.max_pool1d(conv_out, conv_out.size()[2])
 
-        # conv_out = conv_layer(input) # conv_out.size() = (batch_size, out_channels, dim, 1)
-        # activation = F.relu(conv_out.squeeze(3)) # activation.size() = (batch_size, out_channels, dim1)
-        # max_out = F.max_pool1d(activation, activation.size()[2]).squeeze(2) # maxpool_out.size() = (batch_size, out_channels)
-
         return max_out
 
     def forward(self, input_tensor):
         '''
         Parameters
         ----------
-        input_sentences: input_sentences of shape = (batch_size, num_sequences)
+        input_tensor: input_tensor of shape = (batch_size, num_sequences)
         batch_size : default = None. Used only for prediction on a single sentence after training (batch_size = 1)
 
         Returns
         -------
         Output of the linear layer containing logits for pos & neg class.
-        logits.size() = (batch_size, output_size)
 
         '''
-
-        input = self.word_embeddings(input_tensor.type(torch.LongTensor).cuda())
         # input.size() = (batch_size, num_seq, embedding_length)
-        input = input.unsqueeze(1)
+        input = self.word_embeddings(input_tensor.type(torch.LongTensor).cuda())
+        
         # input.size() = (batch_size, 1, num_seq, embedding_length)
+        input = input.unsqueeze(1)
+        
 
         max_out = self.conv_block(input, self.conv)
         max_out = max_out.view(max_out.size(0),-1)
 
         fc_in = self.dropout(max_out)
-        # fc_in.size()) = (batch_size, num_kernels*out_channels)
-        # print('fc_in size:',fc_in.shape)
+
         logits = self.fc(fc_in)
         sig_out = self.sig(logits)
 
         return sig_out
                                             
-
-# def pad_code(code_list_3d,max_sent_len):
-#     paded = []
-    
-#     for file in code_list_3d:
-#         sent_list = []
-#         for line in file:
-#             new_line = line
-#             if len(line) > max_seq_len:
-#                 new_line = line[:max_seq_len]
-#             else:
-#                 new_line = line+[0]*(max_seq_len - len(line))
-#             sent_list.extend(new_line)
-            
-#         if max_sent_len-len(file) > 0:
-#             for i in range(0,max_sent_len-len(file)):
-#                 sent_list.extend([0]*max_seq_len)
-                
-#         paded.append(sent_list[:max_sent_len])
-
-#     return paded
-
-
-# def get_dataloader_for_CNN(code3d, encoded_labels, word2vec):
-
-#     codevec = [[[word2vec.wv.vocab[token].index if token in word2vec.wv.vocab else len(word2vec.wv.vocab) for token in text] for text in texts] for texts in code3d]
-        
-#     max_sent_len = min([len(sent) for sent in (codevec)],45000)
-
-#     features = pad_code(codevec,max_sent_len) # actually 555 can be any number
-
-#     tensor_data = TensorDataset(torch.tensor(features), torch.from_numpy(encoded_labels))
-
-#     dl = DataLoader(tensor_data, shuffle=True, batch_size=batch_size,drop_last=True)
-
-#     return dl
 
 def train_model(dataset_name):
 
@@ -201,7 +129,7 @@ def train_model(dataset_name):
         os.makedirs(loss_dir)
 
     w2v_dir = get_w2v_path()
-    # w2v_dir = '../'+w2v_dir
+
     w2v_dir = os.path.join('../'+w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
 
     train_rel = all_train_releases[dataset_name]
@@ -215,16 +143,6 @@ def train_model(dataset_name):
     
     vocab_size = len(word2vec_model.wv.vocab)  + 1 # for unknown tokens
 
-    # x_train_vec = get_x_vec(train_code3d, word2vec_model)
-    # x_valid_vec = get_x_vec(valid_code3d, word2vec_model)
-
-    # max_sent_len = min(max([len(sent) for sent in (x_train_vec)]), max_train_LOC)
-
-    # train_dl = get_dataloader_for_CNN(train_code3d, train_label, word2vec_model)
-    # train_dl = get_dataloader(x_train_vec,train_label,batch_size,max_sent_len)
-
-    # valid_dl = get_dataloader(x_valid_vec, valid_label,batch_size,max_sent_len)
-
     train_code, train_label = prepare_data(train_df, to_lowercase = True)
     valid_code, valid_label = prepare_data(valid_df, to_lowercase = True)
 
@@ -237,7 +155,7 @@ def train_model(dataset_name):
     train_dl = get_dataloader(word2vec_model, train_code,train_label, padding_idx)
     valid_dl = get_dataloader(word2vec_model, valid_code,valid_label, padding_idx)
 
-    net = CNN(batch_size, 1, 1, n_filters, 0.5, vocab_size, embed_dim)
+    net = CNN(batch_size, 1, n_filters, 0.5, vocab_size, embed_dim)
 
     net = net.cuda()
     
@@ -342,12 +260,12 @@ def train_model(dataset_name):
     print('finished training model of',dataset_name)
 
 
-# epoch (int): which epoch to load model
+# target_epochs (int): which epoch to load model
 def predict_defective_files_in_releases(dataset_name, target_epochs = 100):
     actual_save_model_dir = save_model_dir+dataset_name+'/'
 
     w2v_dir = get_w2v_path()
-        # w2v_dir = '../'+w2v_dir
+
     w2v_dir = os.path.join('../'+w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
 
     train_rel = all_train_releases[dataset_name]
@@ -357,7 +275,7 @@ def predict_defective_files_in_releases(dataset_name, target_epochs = 100):
     
     vocab_size = len(word2vec_model.wv.vocab) + 1
 
-    net = CNN(batch_size, 1, 1, n_filters, 0.5, vocab_size, embed_dim)
+    net = CNN(batch_size, 1, n_filters, 0.5, vocab_size, embed_dim)
 
     checkpoint = torch.load(actual_save_model_dir+'checkpoint_'+target_epochs+'epochs.pth')
 

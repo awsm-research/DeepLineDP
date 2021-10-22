@@ -29,7 +29,7 @@ def train_word2vec_model(dataset_name, embedding_dim = 50):
 
     all_texts = list(more_itertools.collapse(train_code_3d[:],levels=1))
 
-    word2vec = Word2Vec(all_texts,size=embedding_dim, min_count=1,sorted_vocab=1) #size is embedding size
+    word2vec = Word2Vec(all_texts,size=embedding_dim, min_count=1,sorted_vocab=1)
 
     word2vec.save(save_path)
     print('save word2vec model at path {} done'.format(save_path))

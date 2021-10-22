@@ -4,7 +4,6 @@ import torch
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataset import TensorDataset
 
-
 def get_code_str(code, to_lowercase):
     '''
         input
@@ -33,8 +32,6 @@ def prepare_data(df, to_lowercase = False):
     all_file_label = []
 
     for filename, group_df in df.groupby('filename'):
-        # print(filename)
-        # print(group_df)
 
         file_label = bool(group_df['file-label'].unique())
 
@@ -64,13 +61,14 @@ def get_code_vec(code, w2v_model):
     return codevec
 
 def pad_features(codevec, padding_idx, seq_length):
-    ''' Return features of review_ints, where each review is padded with 0's 
-        or truncated to the input seq_length.
     '''
-    ## getting the correct rows x cols shape
+        input
+            codevec (list): a list from get_code_vec()
+            padding_idx (int): value used for padding
+            seq_length (int): max sequence length of each code line 
+    '''
     features = np.zeros((len(codevec), seq_length), dtype=int)
     
-    ## for each review, I grab that review
     for i, row in enumerate(codevec):
         if len(row) > seq_length:
             features[i,:] = row[:seq_length]
@@ -90,9 +88,6 @@ def get_dataloader(w2v_model, code,encoded_labels, padding_idx, batch_size):
 
     '''
     codevec = get_code_vec(code, w2v_model)
-
-    # for c in code:
-    #     codevec.append([w2v_model.wv.vocab[word].index if word in w2v_model.wv.vocab else len(w2v_model.wv.vocab) for word in c.split()])
 
     # to prevent out of memory error
     max_seq_len = min(max([len(cv) for cv in codevec]),45000)

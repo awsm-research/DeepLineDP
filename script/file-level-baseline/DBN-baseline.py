@@ -20,6 +20,7 @@ from my_util import *
 
 arg = argparse.ArgumentParser()
 arg.add_argument('-dataset',type=str, default='activemq', help='software project name (lowercase)')
+arg.add_argument('-exp_name',type=str, default='')
 arg.add_argument('-train',action='store_true')
 arg.add_argument('-predict',action='store_true')
 
@@ -35,43 +36,13 @@ args = arg.parse_args()
 batch_size = 30
 hidden_layers_structure = [100]*10
 embed_dim = 50
-
-# save_model_dir = './baseline-model-DBN/'
-# save_prediction_dir = './prediction-DBN/'
-
-# if not os.path.exists(save_model_dir):
-#     os.makedirs(save_model_dir)
-
-# if not os.path.exists(save_prediction_dir):
-#     os.makedirs(save_prediction_dir)
-
-# include_comment = True
-# include_blank_line = False
-# include_test_file = False
-
-# to_lowercase = True
-
-# dir_suffix = 'lowercase'
-exp_name = ''
-
-# if include_comment:
-#     dir_suffix = dir_suffix + '-with-comment'
-
-# if include_blank_line:
-#     dir_suffix = dir_suffix + '-with-blank-line'
-
-# if include_test_file:
-#     dir_suffix = dir_suffix + '-with-test-file'
-
-# dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
-
+exp_name = arg.exp_name
 
 save_model_dir = '../../output/model/DBN/'
 save_prediction_dir = '../../output/prediction/DBN/'
 
 if not os.path.exists(save_prediction_dir):
     os.makedirs(save_prediction_dir)
-
 
 def convert_to_token_index(w2v_model, code, padding_idx, max_seq_len = None):
     codevec = get_code_vec(code, w2v_model)
@@ -80,8 +51,6 @@ def convert_to_token_index(w2v_model, code, padding_idx, max_seq_len = None):
         max_seq_len = min(max([len(cv) for cv in codevec]),45000)
 
     features = pad_features(codevec, padding_idx, seq_length=max_seq_len)
-     
-    # print('max seq len',max_seq_len)
 
     return features
 
@@ -96,7 +65,6 @@ def train_model(dataset_name):
         os.makedirs(actual_save_model_dir)
 
     w2v_dir = get_w2v_path()
-    # w2v_dir = '../'+w2v_dir
     w2v_dir = os.path.join('../'+w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
 
     train_rel = all_train_releases[dataset_name]
@@ -139,7 +107,6 @@ def train_model(dataset_name):
 def predict_defective_files_in_releases(dataset_name):
 
     w2v_dir = get_w2v_path()
-    # w2v_dir = '../'+w2v_dir
     w2v_dir = os.path.join('../'+w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
 
     train_rel = all_train_releases[dataset_name]
@@ -147,13 +114,13 @@ def predict_defective_files_in_releases(dataset_name):
 
     train_df = get_df(train_rel, is_baseline=True)
 
-    train_code, train_label = prepare_data(train_df, to_lowercase = True)
+    train_code, _ = prepare_data(train_df, to_lowercase = True)
 
     word2vec_model = Word2Vec.load(w2v_dir)
 
-    # find max sequence from training data (for later padding)
     train_codevec = get_code_vec(train_code, word2vec_model)
 
+    # find max sequence from training data (for later padding)
     max_seq_len = min(max([len(cv) for cv in train_codevec]),45000)    
 
     padding_idx = word2vec_model.wv.vocab['<pad>'].index
@@ -172,35 +139,6 @@ def predict_defective_files_in_releases(dataset_name):
         all_rows = []
 
         test_df = get_df(rel, is_baseline=True)
-
-        # test_code, test_label = prepare_data_for_LSTM(test_df, to_lowercase = to_lowercase)
-
-        # token_idx = convert_to_token_index(word2vec_model, test_code, padding_idx, max_seq_len)
-
-        # features = scaler.transform(token_idx)
-
-        # dbn_features = dbn_clf.transform(features)
-
-        # y_pred = rf_clf.predict(dbn_features)
-        # y_prob = rf_clf.predict_proba(dbn_features)
-        # y_prob = y_prob[:,1]
-
-        #                 'project': dataset_name, 
-        #                 'train': train_rel, 
-        #                 'test': rel, 
-        #                 'filename': filename, 
-        #                 'file-level-ground-truth': file_label, 
-        #                 'prediction-prob': y_prob, 
-        #                 'prediction-label': y_pred
-        # df = pd.DataFrame()
-        
-        # df['project'] = [dataset_name]*len(y_pred)
-        # df['train'] = train_rel
-        # df['test'] = rel
-        # df['filename'] = list(test_df['filename'].unique())
-        # df['file-level-ground-truth'] = test_label
-        # df['prediction-prob'] = y_prob
-        # df['prediction-label'] = y_pred
 
         for filename, df in tqdm(test_df.groupby('filename')):
 
@@ -232,7 +170,6 @@ def predict_defective_files_in_releases(dataset_name):
                         'prediction-label': y_pred
                         }
             all_rows.append(row_dict)
-            # break
 
         df = pd.DataFrame(all_rows)
         df.to_csv(save_prediction_dir+rel+'.csv', index=False)
@@ -247,6 +184,3 @@ if args.train:
 
 if args.predict:
     predict_defective_files_in_releases(proj_name)
-
-# train_model('activemq') 
-# predict_defective_files_in_releases('activemq')
