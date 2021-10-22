@@ -30,8 +30,6 @@ all_releases = {'activemq': ['activemq-5.0.0', 'activemq-5.1.0', 'activemq-5.2.0
                      'lucene': ['lucene-2.3.0', 'lucene-2.9.0', 'lucene-3.0.0', 'lucene-3.1'], 
                      'wicket': ['wicket-1.3.0-incubating-beta-1', 'wicket-1.3.0-beta2', 'wicket-1.5.3']}
 
-
-
 all_projs = list(all_train_releases.keys())
 
 file_lvl_gt = '../datasets/preprocessed_data/'
@@ -113,7 +111,7 @@ def get_w2v_path():
 def get_w2v_weight_for_deep_learning_models(word2vec_model, embed_dim):
     word2vec_weights = torch.FloatTensor(word2vec_model.wv.syn0).cuda()
     
-    # for add zero vector for unknown tokens
+    # add zero vector for unknown tokens
     word2vec_weights = torch.cat((word2vec_weights, torch.zeros(1,embed_dim).cuda()))
 
     return word2vec_weights
