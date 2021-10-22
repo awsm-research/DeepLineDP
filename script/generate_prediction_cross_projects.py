@@ -57,8 +57,8 @@ exp_name = args.exp_name
 
 save_model_dir = '../output/model/DeepLineDP/'
 
-intermediate_output_dir = '../output/intermediate_output/DeepLineDP/cross-release/'
-prediction_dir = '../output/prediction/DeepLineDP/cross-release/'
+intermediate_output_dir = '../output/intermediate_output/DeepLineDP/cross-project/'
+prediction_dir = '../output/prediction/DeepLineDP/cross-project/'
 
 file_lvl_gt = '../datasets/preprocessed_data/'
 
