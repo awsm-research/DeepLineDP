@@ -147,10 +147,8 @@ def predict_defective_line(dataset_name):
 
             numpy_line_rep = line_rep.cpu().detach().numpy()
 
-            prob = clf.predict_proba(numpy_line_rep)
             pred = clf.predict(numpy_line_rep)
 
-            df['line-score-prob'] = prob[:,1]
             df['line-score-pred'] = pred.astype(int)
 
             all_df_list.append(df)
