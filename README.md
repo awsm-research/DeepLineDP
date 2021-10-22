@@ -39,7 +39,7 @@ Our repository contains the following directory
 	 - `DeepLineDP_model.py`: The source code that stores DeepLineDP model
 	 - `train_model.py`: The source code used to train DeepLineDP models
 	 - `generate_prediction.py`: The source code used to generate prediction (for RQ1-RQ3 experiment)
-     - `generate_prediction_cross_release.py`: The source code used to generate prediction (for RQ4 experiment) 
+     - `generate_prediction_cross_projects.py`: The source code used to generate prediction (for RQ4 experiment) 
 	 - `RQ1_RQ3.R`: The source code used to generate figures for RQ1, RQ2 and RQ3 **(note: will change name later, don't forget this !!!!)**
 	 - `RQ4.R`: The source code used to obtain results for RQ4
 	 - `file-level-baseline`: The directory that stores implementation of the file-level baselines, and `baseline_util.py` that stores utility function of the baselines
@@ -98,7 +98,7 @@ The trained models will be saved in `./output/model/DeepLineDP/<DATASET_NAME>/`,
 
 To make a prediction of each software release, run the following command:
 
-	python generate_prediction.py -dataset <DATASET_NAME> -target_epochs ???
+	python generate_prediction.py -dataset <DATASET_NAME>
 
 The generated output is a csv file which contains the following information:
 
@@ -120,7 +120,7 @@ The generated output is stored in `./output/prediction/DeepLineDP/`
 
 To make a prediction across software project, run the following command:
 	
-	python generate_prediction_cross_release.py -dataset <DATASET_NAME> -target_epochs ???
+	python generate_prediction_cross_projects.py -dataset <DATASET_NAME>
 	
 The generated output is a csv file which has the same information as above, and is stored in `./output/prediction/DeepLineDP/`
 
@@ -137,11 +137,9 @@ The trained models will be saved in `./output/model/<BASELINE>/<DATASET_NAME>/`,
 
 where \<BASELINE\> is one of the following: Bi-LSTM, CNN, DBN or LR.
 
-**note: not sure about target_epochs, will discuss with AJ. Kla later**
-
 To make a prediction, run the following command:
- - `python Bi-LSTM-baseline.py -data <DATASET_NAME> -predict -target_epochs ???`
- - `python CNN-baseline.py -data <DATASET_NAME> -predict -target_epochs ???`
+ - `python Bi-LSTM-baseline.py -data <DATASET_NAME> -predict -target_epochs 6`
+ - `python CNN-baseline.py -data <DATASET_NAME> -predict -target_epochs 6`
  - `python DBN-baseline.py -data <DATASET_NAME> -predict`
  - `python LR-baseline.py -data <DATASET_NAME> -predict`
 
@@ -163,7 +161,7 @@ There are 2 baselines in this experiment (i.e., n-gram and ErrorProne).
 
 To obtain the result from n-gram, go to `/script/line-level-baseline/ngram/` and run code in `n_gram.java`. The result will be stored in `/n_gram_result/` directory. After all results are obtained, copy the `/n_gram_result/` directory to the `/output/` directory.
 
-To obtain the result from ErrorProne, go to `/script/line-level-baseline/ErrorProne/` and run code in `errorprone.ipynb`. The result will be stored in `/ErrorProne_result/` directory. After all results are obtained, copy the `/ErrorProne_result/` directory to the `/output/` directory.
+To obtain the result from ErrorProne, go to `/script/line-level-baseline/ErrorProne/` and run code in `run_ErrorProne.ipynb`. The result will be stored in `/ErrorProne_result/` directory. After all results are obtained, copy the `/ErrorProne_result/` directory to the `/output/` directory.
 
 ### Obtaining the experiment result presented in the paper
 
