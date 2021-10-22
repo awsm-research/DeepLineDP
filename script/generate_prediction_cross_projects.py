@@ -150,7 +150,7 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
 
             with torch.no_grad():
                 codevec_padded_tensor = torch.tensor(codevec_padded)
-                output, word_att_weights, line_att_weight = model(codevec_padded_tensor)
+                output, word_att_weights, line_att_weight, _ = model(codevec_padded_tensor)
                 file_prob = output.item()
                 prediction = bool(round(output.item()))
 
