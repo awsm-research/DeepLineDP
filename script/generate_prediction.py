@@ -9,7 +9,7 @@ from tqdm import tqdm
 from DeepLineDP_model import *
 from my_util import *
 
-torch.manual_seed(0) # change from 0 to 1234
+torch.manual_seed(0)
 
 arg = argparse.ArgumentParser()
 
@@ -21,18 +21,13 @@ arg.add_argument('-word_gru_num_layers', type=int, default=1, help='number of GR
 arg.add_argument('-sent_gru_num_layers', type=int, default=1, help='number of GRU layer at sentence level')
 arg.add_argument('-exp_name',type=str,default='')
 arg.add_argument('-target_epochs',type=str,default='6', help='the epoch to load model')
-arg.add_argument('-dropout', type=float, default=0.5, help='dropout rate')
-# arg.add_argument('-include_comment',action='store_true')
-# arg.add_argument('-include_blank_line',action='store_true')
-# arg.add_argument('-include_test_file',action='store_true')
+arg.add_argument('-dropout', type=float, default=0.2, help='dropout rate')
 
 args = arg.parse_args()
 
 weight_dict = {}
 
 # model setting
-# batch_size = args.batch_size
-# num_epochs = args.num_epochs
 max_grad_norm = 5
 embed_dim = args.embed_dim
 word_gru_hidden_dim = args.word_gru_hidden_dim
@@ -43,42 +38,9 @@ word_att_dim = 64
 sent_att_dim = 64
 use_layer_norm = True
 dropout = args.dropout
-# lr = args.lr
 
 save_every_epochs = 5
 exp_name = args.exp_name
-
-# include_comment = args.include_comment
-# include_blank_line = args.include_blank_line
-# include_test_file = args.include_test_file
-
-# to_lowercase = True
-
-# dir_suffix = 'no-abs-rebalancing-adaptive-ratio2-with-comment'
-# dir_suffix = 'rebalancing-adaptive-ratio2'
-
-# dir_suffix = 'correct_prob2'
-
-# dir_suffix = 'rebalancing-adaptive-ratio2-lowercase-new-lr2'
-# dir_suffix = 'rebalancing-adaptive-ratio2-lowercase'
-# dir_suffix = 'no-rebalancing-adaptive-ratio2-lowercase'
-
-# dir_suffix = 'train-test-subsequent-release'
-
-# if include_comment:
-#     dir_suffix = dir_suffix + '-with-comment'
-
-# if include_blank_line:
-#     dir_suffix = dir_suffix + '-with-blank-line'
-
-# if include_test_file:
-#     dir_suffix = dir_suffix + '-with-test-file'
-
-# dir_suffix = dir_suffix+'-'+str(embed_dim)+'-dim'
-
-# intermediate_output_dir = '../output/intermediate_output/DeepLineDP/'+dir_suffix+'/'
-# save_model_dir = '../output/model/DeepLineDP/'+dir_suffix+'/'
-# prediction_dir = '../output/prediction/DeepLineDP/'+dir_suffix+'/'
 
 intermediate_output_dir = '../output/intermediate_output/DeepLineDP/'
 save_model_dir = '../output/model/DeepLineDP/'
@@ -97,7 +59,6 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
     train_rel = all_train_releases[dataset_name]
     test_rel = all_eval_releases[dataset_name][1:]
 
-    # w2v_dir = get_w2v_path(include_comment=include_comment,include_test_file=include_test_file)
     w2v_dir = get_w2v_path()
 
     word2vec_file_dir = os.path.join(w2v_dir,dataset_name+'-'+str(embed_dim)+'dim.bin')
@@ -108,11 +69,7 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
     total_vocab = len(word2vec.wv.vocab)
 
     vocab_size = total_vocab +1 # for unknown tokens
-
-        
-    max_sent_len = 999999
-    
-        
+  
     model = HierarchicalAttentionNetwork(
         vocab_size=vocab_size,
         embed_dim=embed_dim,
@@ -146,7 +103,6 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
         if not os.path.exists(actual_intermediate_output_dir):
             os.makedirs(actual_intermediate_output_dir)
 
-        # test_df = get_df(rel, include_comment=include_comment, include_test_files=include_test_file, include_blank_line=include_blank_line)
         test_df = get_df(rel)
     
         row_list = [] # for creating dataframe later...
@@ -165,7 +121,6 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
             code3d = [code2d]
 
             codevec = get_x_vec(code3d, word2vec)
-            # codevec_padded = pad_code(codevec,max_sent_len,limit_sent_len=False, mode='test') 
 
             save_file_path = actual_intermediate_output_dir+filename.replace('/','_').replace('.java','')+'_'+target_epochs+'_epochs.pkl'
             
@@ -198,8 +153,6 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
                 word_att_weights = output_dict['word_attention_mat']
                 line_att_weight = output_dict['line_attention_mat']
 
-            # break
-
             numpy_word_attn = word_att_weights[0].cpu().detach().numpy()
             numpy_line_attn = line_att_weight[0].cpu().detach().numpy()
 
@@ -219,8 +172,6 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
                 for j in range(0,max_len):  
                     tok = token_list[j]
                     word_attn = numpy_word_attn[i][j]
-
-                    # Line-level CSV: project, train, test, filename, file-level ground-truth, deeplinedp_prob, line-number, line-level ground-truth, token, attention score
 
                     row_dict = {
                         'project': dataset_name, 
@@ -242,7 +193,7 @@ def predict_defective_files_in_releases(dataset_name, target_epochs):
 
         df = pd.DataFrame(row_list)
 
-        df.to_csv(prediction_dir+rel+'-'+target_epochs+'-epochs.csv', index=False)
+        df.to_csv(prediction_dir+rel+'.csv', index=False)
 
         print('finished release', rel)
 

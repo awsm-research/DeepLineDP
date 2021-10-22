@@ -37,12 +37,8 @@ all_projs = list(all_train_releases.keys())
 file_lvl_gt = '../datasets/preprocessed_data/'
 
 
-word2vec_dir = '../output/Word2Vec_model/' # remove "with-comment-without-test-file" later...
+word2vec_dir = '../output/Word2Vec_model/' 
 
-# word2vec_dir = '../output/Word2Vec_model_lowercase_no_java_keywords/'
-# word2vec_dir = '../output/Word2Vec_model_cross_release/'
-
-# def get_df(rel, include_comment=False, include_blank_line=False, include_test_files = False, is_baseline=False):
 def get_df(rel, is_baseline=False):
 
     if is_baseline:
@@ -55,15 +51,6 @@ def get_df(rel, is_baseline=False):
 
     df = df[df['is_blank']==False]
     df = df[df['is_test_file']==False]
-
-    # if not include_comment:
-    #     df = df[df['is_comment']==False]
-
-    # if not include_blank_line:
-    #     df = df[df['is_blank']==False]
-
-    # if not include_test_files:
-    #     df = df[df['is_test_file']==False]
 
     return df
 
