@@ -106,7 +106,6 @@ def get_code3d_and_label(df, to_lowercase = False):
 
     return code3d, all_file_label
 
-# def get_w2v_path(include_comment=False,include_test_file=False):
 def get_w2v_path():
 
     return word2vec_dir
