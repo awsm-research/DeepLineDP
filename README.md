@@ -71,7 +71,7 @@ Download the following package: `tidyverse`, `gridExtra`, `ModelMetrics`, `caret
 
 ### Experimental Setup
 
-We use the following hyper-parameters to train our DeepLineDP model (note: will continue this section after the experiment is done)
+We use the following hyper-parameters to train our DeepLineDP model
 
 - `batch_size` = 32
 - `num_epochs` = 10
@@ -85,13 +85,13 @@ We use the following hyper-parameters to train our DeepLineDP model (note: will 
 
 ### Data Preprocessing
 
-First, run the command to prepare data for file-level model training. The output will be stored in `./datasets/preprocessed_data`
+1. run the command to prepare data for file-level model training. The output will be stored in `./datasets/preprocessed_data`
 
-    python preprocess_data.py
+		python preprocess_data.py
 
-Run the command to prepare data for line-level baseline. The output will be stored in `./datasets/ErrorProne_data/` (for ErrorProne), and `./datasets/n_gram_data/` (for n-gram)
+2. run the command to prepare data for line-level baseline. The output will be stored in `./datasets/ErrorProne_data/` (for ErrorProne), and `./datasets/n_gram_data/` (for n-gram)
 
-	python export_data_for_line_level_baseline.py
+		python export_data_for_line_level_baseline.py
 
 ### Word2Vec Model Training
 
@@ -136,7 +136,7 @@ To make a prediction across software project, run the following command:
 	
 	python generate_prediction_cross_projects.py -dataset <DATASET_NAME>
 	
-The generated output is a csv file which has the same information as above, and is stored in `./output/prediction/DeepLineDP/cross-release/`
+The generated output is a csv file which has the same information as above, and is stored in `./output/prediction/DeepLineDP/cross-project/`
 
 ### File-level Baseline Implementation
 
