@@ -30,29 +30,25 @@ class HierarchicalAttentionNetwork(nn.Module):
         self.use_layer_nome = use_layer_norm
         self.dropout = dropout
 
-    def forward(self, docs):
-        """
-        docs: encoded document-level data; LongTensor (num_docs, padded_doc_length, padded_sent_length)
-        :return: class scores, attention weights of words, attention weights of sentences
-        """
+    def forward(self, code_tensor):
         
-        doc_lengths = []
+        code_lengths = []
         sent_lengths = []
 
-        for file in docs:
+        for file in code_tensor:
             code_line = []
-            doc_lengths.append(len(file))
+            code_lengths.append(len(file))
             for line in file:
                 code_line.append(len(line))
             sent_lengths.append(code_line)
         
-        docs = docs.type(torch.LongTensor)
-        doc_lengths = torch.tensor(doc_lengths).type(torch.LongTensor).cuda()
+        code_tensor = code_tensor.type(torch.LongTensor)
+        code_lengths = torch.tensor(code_lengths).type(torch.LongTensor).cuda()
         sent_lengths = torch.tensor(sent_lengths).type(torch.LongTensor).cuda()
         
-        doc_embeds, word_att_weights, sent_att_weights, sents = self.sent_attention(docs, doc_lengths, sent_lengths)
+        code_embeds, word_att_weights, sent_att_weights, sents = self.sent_attention(code_tensor, code_lengths, sent_lengths)
 
-        scores = self.fc(doc_embeds)
+        scores = self.fc(code_embeds)
         final_scrs = self.sig(scores)
 
         return final_scrs, word_att_weights, sent_att_weights, sents
@@ -85,31 +81,25 @@ class SentenceAttention(nn.Module):
         # as u_s is the linear layer's 1D parameter vector here
         self.sentence_context_vector = nn.Linear(sent_att_dim, 1, bias=False)
 
-    def forward(self, docs, doc_lengths, sent_lengths):
-    # here docs are code files
-        """
-        docs: encoded document-level data; LongTensor (num_docs, padded_doc_length, padded_sent_length)
-        doc_lengths: unpadded document lengths; LongTensor (num_docs)
-        sent_lengths: unpadded sentence lengths; LongTensor (num_docs, padded_doc_length)
-        :return: document embeddings, attention weights of words, attention weights of sentences
-        """
-        # Sort documents by decreasing order in length
-        doc_lengths, doc_perm_idx = doc_lengths.sort(dim=0, descending=True)
-        docs = docs[doc_perm_idx]
+    def forward(self, code_tensor, code_lengths, sent_lengths):
+
+        # Sort code_tensor by decreasing order in length
+        code_lengths, doc_perm_idx = code_lengths.sort(dim=0, descending=True)
+        code_tensor = code_tensor[doc_perm_idx]
         sent_lengths = sent_lengths[doc_perm_idx]
 
         # Make a long batch of sentences by removing pad-sentences
-        # i.e. `docs` was of size (num_docs, padded_doc_length, padded_sent_length)
+        # i.e. `code_tensor` was of size (num_code_tensor, padded_code_lengths, padded_sent_length)
         # -> `packed_sents.data` is now of size (num_sents, padded_sent_length)
-        packed_sents = pack_padded_sequence(docs, lengths=doc_lengths.tolist(), batch_first=True)
+        packed_sents = pack_padded_sequence(code_tensor, lengths=code_lengths.tolist(), batch_first=True)
 
         # effective batch size at each timestep
         valid_bsz = packed_sents.batch_sizes
 
         # Make a long batch of sentence lengths by removing pad-sentences
-        # i.e. `sent_lengths` was of size (num_docs, padded_doc_length)
+        # i.e. `sent_lengths` was of size (num_code_tensor, padded_code_lengths)
         # -> `packed_sent_lengths.data` is now of size (num_sents)
-        packed_sent_lengths = pack_padded_sequence(sent_lengths, lengths=doc_lengths.tolist(), batch_first=True)
+        packed_sent_lengths = pack_padded_sequence(sent_lengths, lengths=code_lengths.tolist(), batch_first=True)
 
     
     
@@ -139,23 +129,23 @@ class SentenceAttention(nn.Module):
         sent_att_weights = att / torch.sum(att, dim=1, keepdim=True)
 
         # Restore as documents by repadding
-        docs, _ = pad_packed_sequence(packed_sents, batch_first=True)
+        code_tensor, _ = pad_packed_sequence(packed_sents, batch_first=True)
 
         # Compute document vectors
-        docs = docs * sent_att_weights.unsqueeze(2)
-        docs = docs.sum(dim=1)
+        code_tensor = code_tensor * sent_att_weights.unsqueeze(2)
+        code_tensor = code_tensor.sum(dim=1)
 
         # Restore as documents by repadding
         word_att_weights, _ = pad_packed_sequence(PackedSequence(word_att_weights, valid_bsz), batch_first=True)
 
         # Restore the original order of documents (undo the first sorting)
-        _, doc_unperm_idx = doc_perm_idx.sort(dim=0, descending=False)
-        docs = docs[doc_unperm_idx]
+        _, code_tensor_unperm_idx = doc_perm_idx.sort(dim=0, descending=False)
+        code_tensor = code_tensor[code_tensor_unperm_idx]
 
-        word_att_weights = word_att_weights[doc_unperm_idx]
-        sent_att_weights = sent_att_weights[doc_unperm_idx]
+        word_att_weights = word_att_weights[code_tensor_unperm_idx]
+        sent_att_weights = sent_att_weights[code_tensor_unperm_idx]
 
-        return docs, word_att_weights, sent_att_weights, sents
+        return code_tensor, word_att_weights, sent_att_weights, sents
 
 
 class WordAttention(nn.Module):
