@@ -23,8 +23,8 @@ arg.add_argument('-predict',action='store_true')
 
 args = arg.parse_args()
 
-save_model_dir = '../../output/model/LR/'
-save_prediction_dir = '../../output/prediction/LR/'
+save_model_dir = '../../output/model/BoW/'
+save_prediction_dir = '../../output/prediction/BoW/'
 
 if not os.path.exists(save_model_dir):
     os.makedirs(save_model_dir)
@@ -52,7 +52,7 @@ def train_model(dataset_name):
     clf = LogisticRegression(solver='liblinear')
     clf.fit(X_res, y_res)
     
-    pickle.dump(clf,open(save_model_dir+re.sub('-.*','',train_rel)+"-LR-model.bin",'wb'))
+    pickle.dump(clf,open(save_model_dir+re.sub('-.*','',train_rel)+"-BoW-model.bin",'wb'))
     pickle.dump(vectorizer,open(save_model_dir+re.sub('-.*','',train_rel)+"-vectorizer.bin",'wb'))
     
     print('finished training model for',dataset_name)
@@ -66,7 +66,7 @@ def predict_defective_files_in_releases(dataset_name):
     train_release = all_train_releases[dataset_name]
     eval_releases = all_eval_releases[dataset_name][1:]
 
-    clf = pickle.load(open(save_model_dir+re.sub('-.*','',train_release)+"-LR-model.bin",'rb'))
+    clf = pickle.load(open(save_model_dir+re.sub('-.*','',train_release)+"-BoW-model.bin",'rb'))
     vectorizer = pickle.load(open(save_model_dir+re.sub('-.*','',train_release)+"-vectorizer.bin",'rb'))
 
     for rel in eval_releases:

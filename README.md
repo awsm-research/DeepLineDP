@@ -4,7 +4,7 @@
 
 ## Datasets
 
-The datasets are obtained from Yatish et. al and Wattanakriengkrai et. al. The datasets contain 32 software releases across 9 software projects. The datasets that we used in our experiment can be found in this [github](https://github.com/awsm-research/line-level-defect-prediction).
+The datasets are obtained from Wattanakriengkrai et. al. The datasets contain 32 software releases across 9 software projects. The datasets that we used in our experiment can be found in this [github](https://github.com/awsm-research/line-level-defect-prediction).
 
 The file-level datasets (in File-level directory) contain the following column
 
@@ -45,20 +45,28 @@ Our repository contains the following directory
 	 - `file-level-baseline`: The directory that stores implementation of the file-level baselines, and `baseline_util.py` that stores utility function of the baselines
 	 - `line-level-baseline`: The directory that stores implementation of the line-level baselines
 
-## Environment setup
+## Environment Setup
 
+
+### Python Environment Setup
 First, clone the github repository by using the following command:
 
 	git clone https://github.com/awsm-research/DeepLineDP.git
 
 Next, download the dataset from this [github](https://github.com/awsm-research/line-level-defect-prediction) and keep it in `./datasets/original/`
 
-Then, the following command to install required libraries in conda environment
+Then, use the following command to install required libraries in conda environment
 
 	conda env create -f requirements.yml
 	conda activate DeepLineDP_env
 
-Finally, install PyTorch library by following the instruction from this [link](https://pytorch.org/) (the installation instruction may be different based on OS and CUDA version)
+Finally, install PyTorch library by following the instruction from this [link](https://pytorch.org/) (the installation instruction may vary based on OS and CUDA version)
+
+
+### R Environment Setup
+
+Download the following package: `tidyverse`, `gridExtra`, `ModelMetrics`, `caret`, `reshape2`, `pROC`, `effsize`, `ScottKnottESD`
+
 
 ## Experiment
 
@@ -66,9 +74,15 @@ Finally, install PyTorch library by following the instruction from this [link](h
 
 We use the following hyper-parameters to train our DeepLineDP model (note: will continue this section after the experiment is done)
 
- - ...
- - ...
- - ...
+- `batch_size` = 32
+- `num_epochs` = 10
+- `embed_dim (word embedding size)` = 50
+- `word_gru_hidden_dim` = 64
+- `sent_gru_hidden_dim` = 64
+- `word_gru_num_layers` = 1
+- `sent_gru_num_layers` = 1
+- `dropout` = 0.2
+- `lr (learning rate)` = 0.001
 
 ### Data preprocessing
 
@@ -86,13 +100,14 @@ To train Word2Vec models, run the following command:
 
 	python train_word2vec.py <DATASET_NAME>
   
+Where \<DATASET_NAME\> is one of the following: `activemq`, `camel`, `derby`, `groovy`, `hbase`, `hive`, `jruby`, `lucene`, `wicket`
+
 ### DeepLineDP model training and prediction generation
 
 To train DeepLineDP models, run the following command:
 
 	python train_model.py -dataset <DATASET_NAME>
   
-Where \<DATASET_NAME\> is one of the following: activemq, camel, derby, groovy, hbase, hive, jruby, lucene, wicket
 
 The trained models will be saved in `./output/model/DeepLineDP/<DATASET_NAME>/`, and the loss will be saved in `../output/loss/DeepLineDP/<DATASET_NAME>-loss_record.csv`
 
@@ -126,22 +141,22 @@ The generated output is a csv file which has the same information as above, and 
 
 ### File-level baseline experiment
 
-There are 4 baselines in the experiment (i.e., Bi-LSTM, CNN, DBN and LR). To train the file-level baselines, go to `./script/file-level-baseline/` then run the following commands
+There are 4 baselines in the experiment (i.e., `Bi-LSTM`, `CNN`, `DBN` and `BoW`). To train the file-level baselines, go to `./script/file-level-baseline/` then run the following commands
 
  - `python Bi-LSTM-baseline.py -data <DATASET_NAME> -train`
  - `python CNN-baseline.py -data <DATASET_NAME> -train`
  - `python DBN-baseline.py -data <DATASET_NAME> -train`
- - `python LR-baseline.py -data <DATASET_NAME> -train`
+ - `python BoW-baseline.py -data <DATASET_NAME> -train`
 
 The trained models will be saved in `./output/model/<BASELINE>/<DATASET_NAME>/`, and the loss will be saved in `../output/loss/<BASELINE>/<DATASET_NAME>-loss_record.csv`
 
-where \<BASELINE\> is one of the following: Bi-LSTM, CNN, DBN or LR.
+where \<BASELINE\> is one of the following: `Bi-LSTM`, `CNN`, `DBN` or `BoW`.
 
 To make a prediction, run the following command:
  - `python Bi-LSTM-baseline.py -data <DATASET_NAME> -predict -target_epochs 6`
  - `python CNN-baseline.py -data <DATASET_NAME> -predict -target_epochs 6`
  - `python DBN-baseline.py -data <DATASET_NAME> -predict`
- - `python LR-baseline.py -data <DATASET_NAME> -predict`
+ - `python BoW-baseline.py -data <DATASET_NAME> -predict`
 
 The generated output is a csv file which contains the following information:
 
@@ -157,22 +172,16 @@ The generated output is stored in `./output/prediction/<BASELINE>/`
 
 ### Line-level baseline experiment
 
-There are 2 baselines in this experiment (i.e., n-gram and ErrorProne). 
+There are 2 baselines in this experiment (i.e., `N-gram` and `ErrorProne`). 
 
-To obtain the result from n-gram, go to `/script/line-level-baseline/ngram/` and run code in `n_gram.java`. The result will be stored in `/n_gram_result/` directory. After all results are obtained, copy the `/n_gram_result/` directory to the `/output/` directory.
+To obtain the result from `N-gram`, go to `/script/line-level-baseline/ngram/` and run code in `n_gram.java`. The result will be stored in `/n_gram_result/` directory. After all results are obtained, copy the `/n_gram_result/` directory to the `/output/` directory.
 
-To obtain the result from ErrorProne, go to `/script/line-level-baseline/ErrorProne/` and run code in `run_ErrorProne.ipynb`. The result will be stored in `/ErrorProne_result/` directory. After all results are obtained, copy the `/ErrorProne_result/` directory to the `/output/` directory.
+To obtain the result from `ErrorProne`, go to `/script/line-level-baseline/ErrorProne/` and run code in `run_ErrorProne.ipynb`. The result will be stored in `/ErrorProne_result/` directory. After all results are obtained, copy the `/ErrorProne_result/` directory to the `/output/` directory.
 
 ### Obtaining the experiment result presented in the paper
 
-Run RQ1_RQ3.R to get the result of RQ1-RQ3 (may run in IDE or by the following command)
+Run `get_evaluation_result.R` to get the result of RQ1-RQ4 (may run in IDE or by the following command)
 
-	Rscript RQ1_RQ3.R
+	Rscript  get_evaluation_result.R
 
 The results are figures that are stored in `./output/figures/`
-
-Run RQ4.R to get the result of RQ4 (may run in IDE or by the following command)
-	
-	Rscript RQ4.R
-
-
